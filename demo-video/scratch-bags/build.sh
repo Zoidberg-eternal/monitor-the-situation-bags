@@ -82,9 +82,9 @@ ffmpeg -y \
   " \
   -map 0:v -map "[mix]" \
   -c:v copy -c:a aac -b:a 192k -shortest \
-  "${DV}/monitor-miroshark-bags-SCRATCH.mp4"
+  "${DV}/monitor-miroshark-bags-FINAL.mp4"
 
 echo
 echo "=== DONE ==="
-ffprobe -v error -show_entries format=duration:stream=width,height,r_frame_rate,codec_name -of default=nw=1 "${DV}/monitor-miroshark-bags-SCRATCH.mp4"
-ls -lh "${DV}/monitor-miroshark-bags-SCRATCH.mp4"
+ffprobe -v error -show_entries format=duration:stream=width,height,r_frame_rate,codec_name -of default=nw=1 "${DV}/monitor-miroshark-bags-FINAL.mp4"
+ls -lh "${DV}/monitor-miroshark-bags-FINAL.mp4"
