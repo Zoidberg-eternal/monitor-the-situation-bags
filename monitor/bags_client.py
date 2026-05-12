@@ -94,8 +94,8 @@ class BagsClient:
                 return data
             except (httpx.HTTPStatusError, httpx.TransportError, BagsAPIError) as exc:
                 last_exc = exc
-                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
-                    raise
+                if isinstance(exc, httpx.HTTPStatusError) and 400 <= exc.response.status_code < 500:
+                    raise   # client errors (404, 401, 403, etc.) are final — don't retry
                 wait = BACKOFF_BASE * (2 ** attempt)
                 logger.warning("Bags.fm attempt %d/%d failed: %s", attempt + 1, MAX_RETRIES, exc)
                 time.sleep(wait)
