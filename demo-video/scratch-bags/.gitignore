@@ -1,0 +1,8 @@
+# Build artefacts — reproducible via build.sh + record.mjs + regen_vo.py
+*.webm
+*.mp4
+*.mp3
+stitched-scratch.mp4
+recorder/node_modules/
+recorder/package-lock.json
+recorder/videos/

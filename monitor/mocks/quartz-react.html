@@ -1,0 +1,144 @@
+<!doctype html><html><head>
+<meta charset="utf-8" /><title>Quartz — cluster + ReACT consensus</title>
+<link rel="stylesheet" href="_common.css" />
+<style>
+.layout { display: grid; grid-template-columns: 1fr 520px; gap: 22px; flex: 1; min-height: 0; }
+.graph { position: relative; background: radial-gradient(50% 60% at 50% 50%, rgba(20,241,149,0.06), transparent 70%), var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.graph svg { width: 100%; height: 100%; display: block; }
+.cluster-ring { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 6 8; opacity: 0; animation: ring-in 0.8s ease 0.5s forwards, ring-spin 18s linear 0.5s infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes ring-in { to { opacity: 0.7; } }
+@keyframes ring-spin { to { transform: rotate(360deg); } }
+.report-pop { animation: pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) 1.2s both; }
+@keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.side { display: flex; flex-direction: column; gap: 18px; opacity: 0; transform: translateX(40px); animation: slide-in 0.8s ease 3.5s forwards; }
+@keyframes slide-in { to { opacity: 1; transform: translateX(0); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.card.consensus { border: 1px solid var(--teal); box-shadow: 0 0 24px rgba(20,241,149,0.12); }
+.card h3 { margin: 0 0 14px; font: 12px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); font-weight: 500; }
+.verdict { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.verdict .word { font-size: 36px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: 0.02em; }
+.verdict .conf { font: 14px var(--mono); color: var(--dim); }
+.verdict .conf b { color: var(--text); }
+.summary { font: 14px/1.6 -apple-system, sans-serif; color: #c8c8d8; margin-top: 4px; }
+.summary em { color: var(--teal); font-style: normal; }
+.cluster-row { display: grid; grid-template-columns: 1fr 80px 60px; gap: 10px; padding: 8px 0; font: 12px var(--mono); border-bottom: 1px dashed var(--line); align-items: center; }
+.cluster-row:last-child { border-bottom: 0; }
+.cluster-row .name { color: var(--text); }
+.cluster-row .stance { padding: 2px 8px; border-radius: 4px; font-size: 11px; text-align: center; }
+.cluster-row .stance.bear { background: rgba(255,56,96,0.18); color: var(--red); }
+.cluster-row .stance.bull { background: rgba(20,241,149,0.18); color: var(--teal); }
+.cluster-row .stance.neutral { background: rgba(255,176,32,0.18); color: var(--amber); }
+.cluster-row .n { color: var(--dim); text-align: right; }
+.actions { display: flex; gap: 10px; margin-top: 14px; }
+.actions .btn { padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; font: 12px var(--mono); color: var(--text); background: transparent; }
+.actions .btn.p { border-color: var(--purple); color: var(--purple); }
+</style></head><body>
+<div class="frame">
+  <div class="chrome">
+    <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+    <span class="url">quartz.zerohumanlabs.dev / sim-7f3a / report</span>
+  </div>
+  <div class="shell-frame">
+    <div class="layout">
+      <div class="graph">
+        <svg viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="halo2" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#14f195" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#14f195" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <!-- Cluster A: contrarians (left) -->
+          <circle class="cluster-ring" cx="250" cy="280" r="160" />
+          <!-- Cluster B: whales+momentum (right) -->
+          <circle class="cluster-ring" cx="720" cy="380" r="180" style="animation-delay: 0.5s, 1s;" />
+          <g id="nodes"></g>
+          <!-- ReACT agent pop -->
+          <g class="report-pop" transform="translate(500,640)">
+            <circle r="32" fill="#ffffff" filter="drop-shadow(0 0 14px #ffffff)" />
+            <text text-anchor="middle" y="-44" fill="#ffffff" font-family="ui-monospace, Menlo" font-size="14" letter-spacing="1.5">REPORT AGENT</text>
+            <text text-anchor="middle" y="6" fill="#0a0a14" font-family="ui-monospace, Menlo" font-size="11" font-weight="700">ReACT</text>
+          </g>
+        </svg>
+      </div>
+      <div class="side">
+        <div class="card consensus">
+          <h3>swarm consensus</h3>
+          <div class="verdict">
+            <div class="word">RUG-PRONE</div>
+            <div class="conf">confidence <b>0.78</b></div>
+          </div>
+          <div class="summary">
+            <em>contrarian + conservative</em> clusters converged on <em>rug-prone</em> by round 4.
+            momentum + shiller clusters flipped after whale exit was simulated. report agent
+            weighted contrarian arguments 1.4× due to higher proxy-evidence score.
+          </div>
+          <div class="actions">
+            <span class="btn p">view trace ↗</span>
+            <span class="btn">export analysis</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>cluster breakdown — round 4</h3>
+          <div class="cluster-row"><span class="name">contrarians</span><span class="stance bear">rug-prone</span><span class="n">17/22</span></div>
+          <div class="cluster-row"><span class="name">conservatives</span><span class="stance bear">rug-prone</span><span class="n">14/18</span></div>
+          <div class="cluster-row"><span class="name">whale-trackers</span><span class="stance neutral">cautious</span><span class="n">9/14</span></div>
+          <div class="cluster-row"><span class="name">momentum traders</span><span class="stance bear">rug-prone</span><span class="n">24/34</span></div>
+          <div class="cluster-row"><span class="name">shillers</span><span class="stance bull">moon</span><span class="n">28/36</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const positions = {
+  c1:[210,260], c2:[290,310], c3:[240,360], c4:[320,210],
+  w1:[660,360], w2:[750,310], w3:[720,440], w4:[790,400], w5:[650,470],
+  m1:[810,260], m2:[860,330], m3:[600,470],
+  s1:[260,580], s2:[380,560], s3:[450,640]
+};
+const cMap = { c1:"#14f195", c2:"#14f195", c3:"#14f195", c4:"#14f195",
+               w1:"#ffb020", w2:"#ffb020", w3:"#ffb020", w4:"#ffb020", w5:"#ffb020",
+               m1:"#9945ff", m2:"#9945ff", m3:"#9945ff",
+               s1:"#ff3860", s2:"#ff3860", s3:"#ff3860" };
+const labels = { c1:"contra·02", c2:"contra·09", c3:"contra·14", c4:"contra·21",
+                 w1:"whale·01", w2:"whale·05", w3:"whale·08", w4:"whale·11", w5:"whale·15",
+                 m1:"mt·03", m2:"mt·07", m3:"mt·12",
+                 s1:"shill·04", s2:"shill·11", s3:"shill·17" };
+const svgns = "http://www.w3.org/2000/svg";
+const nG = document.getElementById("nodes");
+Object.entries(positions).forEach(([id, [x,y]], i) => {
+  const g = document.createElementNS(svgns, "g");
+  g.setAttribute("transform", `translate(${x},${y})`);
+  g.style.opacity = "0";
+  const c = document.createElementNS(svgns, "circle");
+  c.setAttribute("r", "9");
+  c.setAttribute("fill", cMap[id]);
+  c.setAttribute("filter", `drop-shadow(0 0 6px ${cMap[id]})`);
+  const t = document.createElementNS(svgns, "text");
+  t.setAttribute("text-anchor", "middle"); t.setAttribute("y", "24");
+  t.setAttribute("fill", "#8a8aa0"); t.setAttribute("font-family", "ui-monospace, Menlo"); t.setAttribute("font-size", "11");
+  t.textContent = labels[id];
+  g.appendChild(c); g.appendChild(t);
+  nG.appendChild(g);
+  setTimeout(() => { g.animate([{opacity:0},{opacity:1}],{duration:400,fill:"forwards"}); g.style.opacity = "1"; }, 80 * i);
+});
+// Beam edges from each cluster to report agent
+setTimeout(() => {
+  const reportPos = [500, 640];
+  Object.entries(positions).forEach(([id, [x,y]], i) => {
+    setTimeout(() => {
+      const ln = document.createElementNS(svgns, "line");
+      ln.setAttribute("x1", x); ln.setAttribute("y1", y);
+      ln.setAttribute("x2", x); ln.setAttribute("y2", y);
+      ln.setAttribute("stroke", cMap[id]);
+      ln.setAttribute("stroke-width", "1.2");
+      ln.setAttribute("opacity", "0.35");
+      nG.appendChild(ln);
+      ln.animate([{ x2: x, y2: y }, { x2: reportPos[0], y2: reportPos[1] }], { duration: 700, fill: "forwards" });
+      ln.setAttribute("x2", reportPos[0]); ln.setAttribute("y2", reportPos[1]);
+    }, i * 90);
+  });
+}, 1800);
+</script>
+</body></html>

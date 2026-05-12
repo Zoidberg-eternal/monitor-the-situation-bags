@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Monitor — Bags.fm Risk Console</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #11141c;
+    --panel-2: #161a24;
+    --line: #1f2533;
+    --text: #e6e9ef;
+    --muted: #8b93a7;
+    --green: #4ade80;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --accent: #7c3aed;
+    --solana: #14F195;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "JetBrains Mono", "SF Mono", Menlo, monospace; height: 100%; }
+  body { display: grid; grid-template-rows: 56px 1fr; }
+  .nav { display: flex; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .brand { font-weight: 700; letter-spacing: 0.3px; }
+  .brand .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--solana); margin-right: 8px; vertical-align: middle; box-shadow: 0 0 12px var(--solana); }
+  .nav .seg { margin-left: 24px; display: flex; gap: 6px; }
+  .nav .seg span { padding: 6px 10px; border-radius: 4px; color: var(--muted); }
+  .nav .seg span.active { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .nav .grow { flex: 1; }
+  .nav .net { color: var(--muted); font-size: 12px; }
+  .nav .net b { color: var(--solana); }
+  .main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; padding: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .panel header { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .panel header h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; text-transform: uppercase; }
+  .panel header .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+  .panel header .pill.live { color: var(--solana); border-color: rgba(20,241,149,0.3); background: rgba(20,241,149,0.08); }
+  .panel header .pill.live::before { content: "●"; margin-right: 4px; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+
+  /* Feed */
+  .feed { overflow-y: auto; }
+  .feed .row { display: grid; grid-template-columns: 48px 1fr 100px 100px 120px; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .feed .row.head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; padding: 6px 16px; }
+  .feed .row .sym { display: flex; align-items: center; gap: 8px; }
+  .feed .row .tok { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--solana)); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color:#000; font-weight:700; }
+  .feed .row .price { color: var(--muted); }
+  .feed .row .delta.up { color: var(--green); }
+  .feed .row .delta.dn { color: var(--red); }
+  .feed .row .risk { text-align: right; }
+  .feed .row .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; min-width: 56px; text-align:center; }
+  .badge.green { background: rgba(74,222,128,0.12); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
+  .badge.amber { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+  .badge.red   { background: rgba(239,68,68,0.14); color: var(--red);   border: 1px solid rgba(239,68,68,0.30); }
+
+  /* Right column */
+  .right { display: grid; grid-template-rows: auto 1fr; gap: 16px; }
+
+  /* Gauge */
+  .gauge-wrap { padding: 24px; display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: center; }
+  .gauge { width: 220px; height: 130px; position: relative; }
+  .gauge svg { width: 100%; height: 100%; }
+  .arc-bg { fill: none; stroke: #1b2030; stroke-width: 18; }
+  .arc-fg { fill: none; stroke: var(--green); stroke-width: 18; stroke-linecap: round; transition: stroke-dashoffset 0.9s cubic-bezier(.22,.61,.36,1), stroke 0.9s ease; }
+  .gauge .needle { position: absolute; left: 50%; bottom: 8px; width: 2px; height: 90px; background: var(--text); transform-origin: bottom center; transition: transform 0.9s cubic-bezier(.22,.61,.36,1), background-color 0.9s ease; transform: rotate(-78deg); }
+  .gauge .pivot { position: absolute; left: 50%; bottom: 4px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--text); }
+  .gauge .label { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); font-size: 22px; font-weight: 700; }
+  .gauge-meta .name { font-size: 16px; font-weight: 600; }
+  .gauge-meta .mint { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .gauge-meta .breakdown div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 12px; }
+  .gauge-meta .breakdown div span:last-child { color: var(--muted); }
+  .verdict { padding: 8px 12px; border-radius: 6px; font-weight: 700; margin-top: 12px; transition: background 0.9s ease, color 0.9s ease; }
+  .verdict.green { background: rgba(74,222,128,0.12); color: var(--green); }
+  .verdict.amber { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .verdict.red   { background: rgba(239,68,68,0.16); color: var(--red); }
+
+  /* Anomaly log */
+  .log .entry { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .log .entry .ts { color: var(--muted); margin-right: 8px; }
+  .log .entry.warn { color: var(--amber); }
+  .log .entry.alert { color: var(--red); }
+
+  /* highlight effect for the anomaly row */
+  .feed .row.alert { background: rgba(239,68,68,0.06); }
+  .pulse-row { animation: rowPulse 1.6s ease-in-out 1; }
+  @keyframes rowPulse {
+    0%   { background: rgba(245,158,11,0.04); }
+    40%  { background: rgba(239,68,68,0.18); }
+    100% { background: rgba(239,68,68,0.06); }
+  }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand"><span class="dot"></span>Monitor · Bags.fm Risk Console</div>
+    <div class="seg">
+      <span class="active">Live feed</span>
+      <span>Anomalies</span>
+      <span>Swarm</span>
+      <span>API keys</span>
+    </div>
+    <div class="grow"></div>
+    <div class="net">network <b>solana / mainnet</b> · oracle <b>online</b></div>
+  </div>
+
+  <div class="main">
+    <!-- Live Bags.fm token feed -->
+    <div class="panel">
+      <header>
+        <h2>Bags.fm Token Feed</h2>
+        <span class="pill live">LIVE</span>
+        <span class="pill">last update <span id="lastTs">--</span></span>
+      </header>
+      <div class="feed" id="feed">
+        <div class="row head">
+          <div></div><div>Token / Mint</div><div>Price (USD)</div><div>Δ 5m</div><div>Composite Risk</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column: gauge + log -->
+    <div class="right">
+      <div class="panel">
+        <header>
+          <h2>Composite Risk Gauge</h2>
+          <span class="pill" id="targetPill">tracking · WIRED</span>
+        </header>
+        <div class="gauge-wrap">
+          <div class="gauge">
+            <svg viewBox="0 0 220 130">
+              <path class="arc-bg" d="M 20 110 A 90 90 0 0 1 200 110" />
+              <path id="arc" class="arc-fg" d="M 20 110 A 90 90 0 0 1 200 110"
+                    stroke-dasharray="283" stroke-dashoffset="226" />
+            </svg>
+            <div class="needle" id="needle"></div>
+            <div class="pivot"></div>
+            <div class="label" id="score">12</div>
+          </div>
+          <div class="gauge-meta">
+            <div class="name">WIRED · Bags.fm launch</div>
+            <div class="mint">8ZQk…tLnP</div>
+            <div class="breakdown">
+              <div><span>liquidity depth</span><span id="bd1">healthy</span></div>
+              <div><span>holder concentration</span><span id="bd2">low</span></div>
+              <div><span>sentiment vector</span><span id="bd3">+0.41</span></div>
+              <div><span>velocity z-score</span><span id="bd4">0.6</span></div>
+            </div>
+            <div class="verdict green" id="verdict">SAFE · monitoring</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel log">
+        <header>
+          <h2>Anomaly Log</h2>
+          <span class="pill">last 10 min</span>
+        </header>
+        <div id="log">
+          <div class="entry"><span class="ts">20:41:08</span>swarm boot — 137 personas loaded</div>
+          <div class="entry"><span class="ts">20:41:24</span>oracle handshake · solana-gateway:3403 healthy</div>
+          <div class="entry"><span class="ts">20:41:42</span>WIRED launch — score 12 / SAFE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1) Live feed — a fixed roster of Bags.fm-style launches with one outlier.
+    const tokens = [
+      { sym: 'WIRED',  mint: '8ZQk…tLnP', price: 0.0042, d5m: +6.2, risk: 12, cls: 'green', anomaly: true,  label: 'SAFE' },
+      { sym: 'PIXEL',  mint: 'Cwq3…uV1m', price: 0.0011, d5m: +1.4, risk: 18, cls: 'green', label: 'SAFE' },
+      { sym: 'NOMAD',  mint: 'A2tF…dKj9', price: 0.0207, d5m: -2.7, risk: 27, cls: 'green', label: 'SAFE' },
+      { sym: 'GLINT',  mint: 'B6uW…pR4x', price: 0.0089, d5m: +0.8, risk: 33, cls: 'amber', label: 'WATCH' },
+      { sym: 'QORVA',  mint: 'F9hZ…sX2v', price: 0.0501, d5m: -0.3, risk: 41, cls: 'amber', label: 'WATCH' },
+      { sym: 'TUNDRA', mint: 'Mn4P…cQ7e', price: 0.0026, d5m: +9.1, risk: 55, cls: 'amber', label: 'WATCH' },
+      { sym: 'HALO',   mint: 'Yr8N…vL3a', price: 0.0014, d5m: +12.6, risk: 68, cls: 'red',  label: 'RISK' },
+      { sym: 'STORM',  mint: 'Kj0E…wF6t', price: 0.0072, d5m: -1.1, risk: 21, cls: 'green', label: 'SAFE' },
+      { sym: 'OPAL',   mint: 'P7sR…aB9d', price: 0.0093, d5m: +2.0, risk: 29, cls: 'green', label: 'SAFE' },
+    ];
+    const feed = document.getElementById('feed');
+    tokens.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'row' + (t.anomaly ? ' tracked' : '');
+      row.dataset.sym = t.sym;
+      row.innerHTML = `
+        <div class="sym"><span class="tok">${t.sym[0]}</span></div>
+        <div><div>${t.sym}</div><div style="color:var(--muted);font-size:11px">${t.mint}</div></div>
+        <div class="price">$${t.price.toFixed(4)}</div>
+        <div class="delta ${t.d5m >= 0 ? 'up' : 'dn'}">${t.d5m >= 0 ? '+' : ''}${t.d5m.toFixed(1)}%</div>
+        <div class="risk"><span class="badge ${t.cls}" data-orig="${t.label}">${t.label}</span></div>`;
+      feed.appendChild(row);
+    });
+
+    // Timestamp
+    const lastTs = document.getElementById('lastTs');
+    const fmt = (d) => d.toTimeString().slice(0,8);
+    setInterval(() => lastTs.textContent = fmt(new Date()), 500);
+
+    // 2) Gauge animation — green → amber → red on the WIRED token, then back to amber.
+    const arc = document.getElementById('arc');
+    const needle = document.getElementById('needle');
+    const score = document.getElementById('score');
+    const verdict = document.getElementById('verdict');
+    const bd3 = document.getElementById('bd3');
+    const bd4 = document.getElementById('bd4');
+    // total arc length is ~283 (semicircle r=90). Map score 0..100 -> offset 283..0.
+    const setRisk = (v, color, label) => {
+      const off = Math.max(0, Math.min(283, 283 - v * 2.83));
+      arc.setAttribute('stroke-dashoffset', off);
+      arc.style.stroke = color;
+      needle.style.background = color;
+      // needle: -78deg at 0, +78deg at 100
+      const deg = -78 + (v / 100) * 156;
+      needle.style.transform = `rotate(${deg}deg)`;
+      score.textContent = v;
+      verdict.className = 'verdict ' + (v < 30 ? 'green' : v < 60 ? 'amber' : 'red');
+      verdict.textContent = label;
+    };
+  </script>
+</body>
+</html>

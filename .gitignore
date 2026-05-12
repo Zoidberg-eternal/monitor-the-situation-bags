@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Node
+node_modules/
+stellar-gateway/dist/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Demo video working files (large binaries; final video lives on YouTube)
+demo-video/**/*.mp4
+demo-video/**/*.mp3
+demo-video/**/*.webm
+demo-video/**/*.jpg
+demo-video/**/*.bak
+demo-video-segments.json
+
+# YouTube uploader: per-tool venv + OAuth secrets (never commit)
+demo-video/yt-upload-venv/
+demo-video/yt-upload-creds/

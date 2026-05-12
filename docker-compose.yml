@@ -1,0 +1,58 @@
+services:
+  monitor:
+    build: .
+    ports:
+      - "8402:8402"
+    environment:
+      - MIROSHARK_URL=http://miroshark:5001
+      - HOST=0.0.0.0
+      - PORT=8402
+    depends_on:
+      - miroshark
+
+  solana-gateway:
+    build: ./solana-gateway
+    ports:
+      - "3403:3403"
+    environment:
+      - PORT=3403
+      - UPSTREAM_URL=http://monitor:8402
+      - SOLANA_ADDRESS=${SOLANA_ADDRESS:-}
+      - SOLANA_NETWORK=${SOLANA_NETWORK:-devnet}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+    depends_on:
+      - monitor
+
+  miroshark:
+    build:
+      context: ../miroshark
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+      - "3000:3000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=miroshark
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+  neo4j:
+    image: neo4j:5.15-community
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/miroshark
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  neo4j_data:

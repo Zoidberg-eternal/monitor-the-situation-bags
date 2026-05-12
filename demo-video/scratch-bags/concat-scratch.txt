@@ -1,0 +1,8 @@
+file '01-hook.mp4'
+file '02-dashboard.mp4'
+file '04-swarm.mp4'
+file '05-quartz-nav.mp4'
+file '06-quartz-react.mp4'
+file '07-x402.mp4'
+file '08-explorer.mp4'
+file '09-outro.mp4'

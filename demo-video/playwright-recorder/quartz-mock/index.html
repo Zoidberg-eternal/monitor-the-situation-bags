@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Quartz · MiroShark Knowledge Graph — Bags.fm Swarm</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #11141c;
+    --panel-2: #161a24;
+    --line: #1f2533;
+    --line-2: #2a3142;
+    --text: #e6e9ef;
+    --muted: #8b93a7;
+    --muted-2: #b6bcca;
+    --green: #4ade80;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --accent: #7c3aed;
+    --accent-2: #a78bfa;
+    --solana: #14F195;
+    --teal: #2dd4bf;
+    --link: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "JetBrains Mono", "SF Mono", Menlo, monospace; height: 100%; }
+  body { display: grid; grid-template-rows: 56px 1fr; }
+
+  /* Top nav */
+  .nav { display: flex; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .brand { font-weight: 700; letter-spacing: 0.3px; }
+  .brand .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); margin-right: 8px; vertical-align: middle; box-shadow: 0 0 12px var(--accent-2); }
+  .nav .crumbs { color: var(--muted); }
+  .nav .crumbs b { color: var(--text); }
+  .nav .grow { flex: 1; }
+  .nav .meta { color: var(--muted); font-size: 12px; }
+  .nav .meta b { color: var(--teal); }
+
+  /* Main: explorer | graph + content | meta */
+  .main { display: grid; grid-template-columns: 260px 1fr 360px; gap: 0; height: calc(100vh - 56px); overflow: hidden; }
+
+  /* Explorer sidebar */
+  .explorer { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 0; }
+  .explorer h3 { margin: 0; padding: 0 16px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+  .explorer .group { padding-bottom: 12px; border-bottom: 1px dashed var(--line); margin-bottom: 12px; }
+  .explorer .item { display: flex; align-items: center; gap: 8px; padding: 4px 16px; font-size: 13px; color: var(--muted-2); cursor: pointer; }
+  .explorer .item .caret { color: var(--muted); width: 12px; }
+  .explorer .item.active { color: var(--accent-2); background: rgba(124,58,237,0.10); border-left: 2px solid var(--accent-2); padding-left: 14px; }
+  .explorer .item.sub { padding-left: 32px; font-size: 12px; color: var(--muted); }
+  .explorer .item.sub.active { padding-left: 30px; }
+  .explorer .item:hover { color: var(--text); }
+  .explorer .tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); margin-left: auto; }
+  .explorer .tag.live { color: var(--teal); border-color: rgba(45,212,191,0.30); background: rgba(45,212,191,0.08); }
+
+  /* Center column scrolls */
+  .center { overflow-y: auto; padding: 24px 28px 80px; }
+  .center h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+  .center .subtitle { color: var(--muted); margin-bottom: 18px; font-size: 13px; }
+  .center .tagline { color: var(--accent-2); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+
+  /* Graph panel */
+  .graph-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .graph-wrap header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .graph-wrap header h2 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .graph-wrap header .pill { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+  .graph-wrap header .pill.tealp { color: var(--teal); border-color: rgba(45,212,191,0.30); background: rgba(45,212,191,0.08); }
+  .graph { height: 460px; position: relative; background: radial-gradient(ellipse at center, rgba(124,58,237,0.10) 0%, transparent 60%), var(--panel); }
+  .graph svg { width: 100%; height: 100%; display: block; }
+  .graph .node-label { font: 11px/1 "JetBrains Mono", monospace; fill: var(--text); pointer-events: none; }
+  .graph .belief-edge { stroke: var(--accent-2); stroke-opacity: 0.45; stroke-width: 1.2; fill: none; }
+  .graph .belief-edge.hot { stroke: var(--solana); stroke-opacity: 0.85; stroke-width: 2.4; }
+  .graph .pulse { animation: nodePulse 2.4s ease-in-out infinite; }
+  @keyframes nodePulse { 0%,100% { opacity: 1; r: var(--rest); } 50% { opacity: 0.7; r: var(--peak); } }
+
+  /* Belief / trajectory blocks */
+  .section { margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .section header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .section header h2 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .section header .pill { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+  .section .body { padding: 14px 16px; }
+  .section .body p { margin: 0 0 8px; color: var(--muted-2); }
+  .section .row { display: grid; grid-template-columns: 100px 100px 1fr 80px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 12px; align-items: center; }
+  .section .row.head { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .section .row .delta.up { color: var(--green); }
+  .section .row .delta.dn { color: var(--red); }
+  .section .body .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted-2); margin-right: 4px; }
+  .section .body .tag.accent { color: var(--accent-2); border-color: rgba(124,58,237,0.3); background: rgba(124,58,237,0.08); }
+  .section .body .tag.teal { color: var(--teal); border-color: rgba(45,212,191,0.3); background: rgba(45,212,191,0.08); }
+  .section .body .tag.red { color: var(--red); border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
+
+  /* ReACT consensus card */
+  .react-card { margin-top: 18px; background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(45,212,191,0.10)); border: 1px solid rgba(124,58,237,0.30); border-radius: 8px; padding: 16px 18px; }
+  .react-card .stamp { color: var(--accent-2); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .react-card h3 { margin: 0 0 8px; font-size: 16px; }
+  .react-card .verdict { display: inline-block; padding: 4px 10px; border-radius: 4px; font-weight: 700; background: rgba(239,68,68,0.18); color: var(--red); border: 1px solid rgba(239,68,68,0.30); font-size: 12px; }
+  .react-card ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted-2); font-size: 13px; }
+  .react-card ul li { margin-bottom: 4px; }
+  .react-card .footnote { margin-top: 10px; color: var(--muted); font-size: 11px; }
+
+  /* Right meta panel */
+  .meta-col { background: var(--panel); border-left: 1px solid var(--line); padding: 18px 18px 60px; overflow-y: auto; font-size: 12px; color: var(--muted-2); }
+  .meta-col h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .meta-col .kv { display: grid; grid-template-columns: 1fr auto; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .meta-col .kv span:last-child { color: var(--text); }
+  .meta-col .links { margin-top: 16px; }
+  .meta-col .links a { color: var(--link); text-decoration: none; display: block; padding: 3px 0; }
+  .meta-col .ctx-block { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .meta-col .ctx-block .layer { display: flex; gap: 6px; padding: 3px 0; align-items: center; }
+  .meta-col .ctx-block .layer .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); flex-shrink: 0; }
+
+  .scroll-anchor { scroll-margin-top: 12px; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <div class="brand"><span class="dot"></span>Quartz · MiroShark Knowledge Graph</div>
+    <div class="crumbs">/ agents / <b>momentum-trader</b></div>
+    <div class="grow"></div>
+    <div class="meta">simulation <b>sim_b8f4a09e</b> · 137 personas · 4 rounds</div>
+  </div>
+
+  <div class="main">
+    <!-- Explorer -->
+    <aside class="explorer">
+      <div class="group">
+        <h3>Explorer</h3>
+        <div class="item"><span class="caret">▾</span> agents <span class="tag">8</span></div>
+        <div class="item sub active">momentum-trader</div>
+        <div class="item sub">whale-tracker</div>
+        <div class="item sub">contrarian</div>
+        <div class="item sub">shiller</div>
+        <div class="item sub">conservative-analyst</div>
+        <div class="item sub">reddit-degen-radar</div>
+        <div class="item sub">polymarket-arb</div>
+        <div class="item sub">x-influencer-tracker</div>
+      </div>
+      <div class="group">
+        <div class="item"><span class="caret">▸</span> simulations <span class="tag live">live</span></div>
+        <div class="item sub">sim_b8f4a09e — WIRED launch</div>
+        <div class="item sub">sim_4c12bd33 — HALO pump</div>
+        <div class="item sub">sim_7a91e5d0 — STORM rug</div>
+      </div>
+      <div class="group">
+        <div class="item"><span class="caret">▸</span> tokens <span class="tag">42</span></div>
+        <div class="item sub">WIRED — 8ZQk…tLnP</div>
+        <div class="item sub">HALO — Yr8N…vL3a</div>
+        <div class="item sub">TUNDRA — Mn4P…cQ7e</div>
+        <div class="item sub">PIXEL — Cwq3…uV1m</div>
+      </div>
+      <div class="group" style="border-bottom:none;">
+        <div class="item"><span class="caret">▸</span> rounds</div>
+        <div class="item"><span class="caret">▸</span> consensus reports <span class="tag">4</span></div>
+      </div>
+    </aside>
+
+    <!-- Center scrolling content -->
+    <main class="center" id="center">
+      <div class="tagline">agent · momentum-trader</div>
+      <h1>momentum-trader</h1>
+      <div class="subtitle">5-layer grounded LLM persona · 24 beliefs traced across 4 rounds · simulation <b style="color:var(--text)">sim_b8f4a09e</b></div>
+
+      <!-- Graph -->
+      <div class="graph-wrap" id="graphPanel">
+        <header>
+          <h2>Persona Graph · Belief Propagation</h2>
+          <span class="pill tealp">● live</span>
+          <span class="pill">round 3 / 4</span>
+          <span class="pill">edges weighted by influence</span>
+        </header>
+        <div class="graph">
+          <svg id="graphSvg" viewBox="0 0 920 460" preserveAspectRatio="xMidYMid meet">
+            <!-- Edges (rendered first so they sit under nodes) -->
+            <g id="edges"></g>
+            <!-- Nodes -->
+            <g id="nodes"></g>
+            <!-- Labels -->
+            <g id="labels"></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Belief trajectory -->
+      <div class="section scroll-anchor" id="trajectory">
+        <header>
+          <h2>Belief Trajectory · WIRED launch</h2>
+          <span class="pill">persona: momentum-trader</span>
+        </header>
+        <div class="body">
+          <div class="row head">
+            <div>Round</div><div>Stance</div><div>Argument summary</div><div>Confidence</div>
+          </div>
+          <div class="row">
+            <div>R1</div><div class="delta up">LONG</div>
+            <div>"Volume profile and 5m delta resemble the WIRED early curve from sim_4c12bd33 — momentum signature pre-pump."</div>
+            <div>0.62</div>
+          </div>
+          <div class="row">
+            <div>R2</div><div class="delta up">LONG</div>
+            <div>"Whale-tracker confirmed top-3 holder concentration is stable; sentiment vector +0.41 from X feed. Reinforces signal."</div>
+            <div>0.74</div>
+          </div>
+          <div class="row">
+            <div>R3</div><div class="delta dn">FLIP → SHORT</div>
+            <div>"Contrarian flagged identical liquidity-yank pattern to STORM rug. Re-weighted velocity z-score above 0.6 threshold — defer to risk-off."</div>
+            <div>0.58</div>
+          </div>
+          <div class="row">
+            <div>R4</div><div class="delta dn">SHORT</div>
+            <div>"Aligned with conservative-analyst. Final stance: distribution event imminent within next 90s."</div>
+            <div>0.81</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context layers -->
+      <div class="section scroll-anchor" id="context">
+        <header>
+          <h2>5-Layer Grounding</h2>
+          <span class="pill">graph · relationships · semantic · related · web</span>
+        </header>
+        <div class="body">
+          <p><span class="tag accent">L1</span> Graph attributes — node embedding clustered with 11 other momentum personas (cosine 0.83).</p>
+          <p><span class="tag accent">L2</span> Relationships — strong edge to whale-tracker (w=0.71), inverse to contrarian (w=-0.48).</p>
+          <p><span class="tag accent">L3</span> Semantic search — 6 prior sims with matching token signature; 4 ended in -60% within 5min of pivot.</p>
+          <p><span class="tag accent">L4</span> Related nodes — TUNDRA, HALO, STORM share liquidity-curve archetype.</p>
+          <p><span class="tag accent">L5</span> Live web — 3 X posts flagging "rug suspect" by influencer cluster in last 90s.</p>
+        </div>
+      </div>
+
+      <!-- Cluster anchor for shot 6 -->
+      <div class="section scroll-anchor" id="cluster">
+        <header>
+          <h2>Cluster Convergence · Round 4</h2>
+          <span class="pill">137 personas → 2 dominant stances</span>
+        </header>
+        <div class="body">
+          <p><span class="tag teal">CLUSTER-A</span> 89 personas · final stance <b>SHORT / EXIT</b> — average confidence 0.76, driven by contrarian + conservative-analyst pivot in round 3.</p>
+          <p><span class="tag red">CLUSTER-B</span> 41 personas · final stance <b>HOLD</b> — average confidence 0.42, primarily shillers and reddit-degens unwilling to break from momentum priors.</p>
+          <p><span class="tag">UNDECIDED</span> 7 personas · oscillating between rounds. Excluded from final consensus.</p>
+        </div>
+      </div>
+
+      <!-- ReACT consensus card -->
+      <div class="react-card scroll-anchor" id="react">
+        <div class="stamp">ReACT Report · Final Consensus</div>
+        <h3>WIRED · Bags.fm launch — projected distribution event within 90s</h3>
+        <span class="verdict">RUG-SIGNATURE · risk score 78 / 100</span>
+        <ul>
+          <li><b>First mover:</b> contrarian (round 3) — identified STORM-rug liquidity pattern.</li>
+          <li><b>Cascade:</b> whale-tracker → momentum-trader → conservative-analyst — confidence 0.81 by round 4.</li>
+          <li><b>Holdouts:</b> 41 shillers / reddit-degens stayed long; not weighted in final stance.</li>
+          <li><b>Decision rule:</b> ≥ 60% supermajority on bear cluster + risk-side velocity z &gt; 0.6 → EXIT.</li>
+        </ul>
+        <div class="footnote">explainable AI · every belief in this report traced to graph attributes + raw round transcripts · no black-box weights</div>
+      </div>
+    </main>
+
+    <!-- Right meta column -->
+    <aside class="meta-col">
+      <h4>Persona Metadata</h4>
+      <div class="kv"><span>archetype</span><span>momentum-trader</span></div>
+      <div class="kv"><span>model</span><span>claude-opus-4-6</span></div>
+      <div class="kv"><span>risk tolerance</span><span>aggressive</span></div>
+      <div class="kv"><span>time horizon</span><span>0–5 min</span></div>
+      <div class="kv"><span>prior sims</span><span>614</span></div>
+      <div class="kv"><span>accuracy@5min</span><span>0.69</span></div>
+
+      <div class="ctx-block">
+        <h4>Context layers fed this round</h4>
+        <div class="layer"><span class="dot"></span><span>L1 · graph attributes</span></div>
+        <div class="layer"><span class="dot"></span><span>L2 · relationship weights</span></div>
+        <div class="layer"><span class="dot"></span><span>L3 · semantic prior-sim recall</span></div>
+        <div class="layer"><span class="dot"></span><span>L4 · related-token nodes</span></div>
+        <div class="layer"><span class="dot"></span><span>L5 · live web research (X, Reddit)</span></div>
+      </div>
+
+      <div class="ctx-block links">
+        <h4>Related</h4>
+        <a href="#trajectory">→ Belief trajectory</a>
+        <a href="#context">→ 5-layer grounding</a>
+        <a href="#cluster">→ Cluster convergence</a>
+        <a href="#react">→ ReACT consensus</a>
+      </div>
+
+      <div class="ctx-block">
+        <h4>Edges (top 3)</h4>
+        <div class="kv"><span>whale-tracker</span><span>+0.71</span></div>
+        <div class="kv"><span>conservative-analyst</span><span>+0.44</span></div>
+        <div class="kv"><span>contrarian</span><span>−0.48</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // Build a small force-positioned graph with the eight Bags-narrative personas.
+    const nodes = [
+      { id: 'momentum-trader',     x: 220, y: 230, r: 16, color: 'var(--solana)',  hot: true,  label: 'momentum-trader' },
+      { id: 'whale-tracker',       x: 360, y: 110, r: 14, color: 'var(--teal)',    hot: true,  label: 'whale-tracker' },
+      { id: 'contrarian',          x: 520, y: 240, r: 15, color: 'var(--accent-2)',hot: true,  label: 'contrarian' },
+      { id: 'conservative-analyst',x: 680, y: 130, r: 13, color: 'var(--accent)',  hot: false, label: 'conservative-analyst' },
+      { id: 'shiller',             x: 760, y: 320, r: 12, color: 'var(--amber)',   hot: false, label: 'shiller' },
+      { id: 'reddit-degen-radar',  x: 540, y: 380, r: 12, color: 'var(--red)',     hot: false, label: 'reddit-degen-radar' },
+      { id: 'polymarket-arb',      x: 380, y: 340, r: 11, color: 'var(--link)',    hot: false, label: 'polymarket-arb' },
+      { id: 'x-influencer-tracker',x: 130, y: 110, r: 11, color: 'var(--muted-2)', hot: false, label: 'x-influencer-tracker' },
+    ];
+    const edges = [
+      { a: 'momentum-trader', b: 'whale-tracker', hot: true },
+      { a: 'momentum-trader', b: 'contrarian',    hot: true },
+      { a: 'whale-tracker',   b: 'contrarian',    hot: false },
+      { a: 'contrarian',      b: 'conservative-analyst', hot: true },
+      { a: 'conservative-analyst', b: 'shiller',  hot: false },
+      { a: 'momentum-trader', b: 'shiller',       hot: false },
+      { a: 'reddit-degen-radar', b: 'shiller',    hot: false },
+      { a: 'momentum-trader', b: 'reddit-degen-radar', hot: false },
+      { a: 'polymarket-arb', b: 'contrarian',     hot: false },
+      { a: 'polymarket-arb', b: 'momentum-trader', hot: false },
+      { a: 'x-influencer-tracker', b: 'momentum-trader', hot: false },
+      { a: 'x-influencer-tracker', b: 'shiller',  hot: false },
+    ];
+
+    const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+    const svg = document.getElementById('graphSvg');
+    const eGroup = document.getElementById('edges');
+    const nGroup = document.getElementById('nodes');
+    const lGroup = document.getElementById('labels');
+
+    edges.forEach(e => {
+      const a = byId[e.a], b = byId[e.b];
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('class', 'belief-edge' + (e.hot ? ' hot' : ''));
+      eGroup.appendChild(line);
+    });
+
+    nodes.forEach(n => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', n.r);
+      c.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue(n.color.replace('var(','').replace(')','')) || n.color);
+      c.setAttribute('stroke', 'rgba(255,255,255,0.45)');
+      c.setAttribute('stroke-width', '1.5');
+      c.style.setProperty('--rest', n.r);
+      c.style.setProperty('--peak', n.r + 3);
+      if (n.hot) c.setAttribute('class', 'pulse');
+      nGroup.appendChild(c);
+
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', n.x); t.setAttribute('y', n.y + n.r + 14);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('class', 'node-label');
+      t.textContent = n.label;
+      lGroup.appendChild(t);
+    });
+
+    // Animated "hot" edge pulse — cycle through the three hot edges with a glow.
+    const hotLines = Array.from(document.querySelectorAll('.belief-edge.hot'));
+    let i = 0;
+    setInterval(() => {
+      hotLines.forEach(l => { l.style.strokeOpacity = '0.45'; l.style.strokeWidth = '1.6'; });
+      const cur = hotLines[i % hotLines.length];
+      if (cur) { cur.style.strokeOpacity = '1'; cur.style.strokeWidth = '3.0'; }
+      i += 1;
+    }, 900);
+
+    // Expose a helper for the recorder to scroll into specific anchors.
+    window.scrollToSection = (id) => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  </script>
+</body>
+</html>

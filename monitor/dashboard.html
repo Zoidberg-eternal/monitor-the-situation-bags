@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monitor — Bags.fm Live Risk</title>
+<style>
+  :root {
+    --bg: #0a0a14;
+    --panel: #12121e;
+    --panel-2: #1a1a2a;
+    --purple: #9945ff;
+    --teal: #14f195;
+    --amber: #ffb020;
+    --red: #ff3860;
+    --text: #f5f5fa;
+    --dim: #8a8aa0;
+    --line: #2a2a3a;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; padding: 0;
+               font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+               -webkit-font-smoothing: antialiased; }
+  body { padding: 24px 32px; min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand h1 { margin: 0; font-size: 28px; font-weight: 600;
+              background: linear-gradient(90deg, var(--purple), var(--teal));
+              -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand .sub { color: var(--dim); font-family: var(--mono); font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+           border: 1px solid var(--line); border-radius: 999px;
+           font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+           text-transform: uppercase; }
+  .badge.live::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
+                        background: var(--teal); box-shadow: 0 0 12px var(--teal); }
+  .badge.demo { color: var(--amber); border-color: var(--amber); }
+
+  .meta-row { display: flex; gap: 24px; align-items: center; margin-top: 12px;
+              font-family: var(--mono); font-size: 13px; color: var(--dim); }
+  .meta-row b { color: var(--text); font-weight: 500; }
+
+  main { display: grid; grid-template-columns: 1fr 380px; gap: 24px; margin-top: 22px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+
+  .feed { display: flex; flex-direction: column; gap: 8px; }
+  .token { display: grid; grid-template-columns: 56px 1fr 220px 200px;
+           gap: 18px; align-items: center;
+           background: var(--panel); border: 1px solid var(--line);
+           border-radius: 14px; padding: 14px 18px; transition: border-color 200ms ease, transform 200ms ease; }
+  .token.alert { border-color: var(--red); animation: pulse-red 1.4s ease-in-out 2; }
+  .token.warn { border-color: var(--amber); }
+  .token .img { width: 56px; height: 56px; border-radius: 10px;
+                background: var(--panel-2); object-fit: cover;
+                display: flex; align-items: center; justify-content: center;
+                font-family: var(--mono); color: var(--dim); font-size: 11px; }
+  .token .img img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+  .token .name { font-size: 16px; font-weight: 600; }
+  .token .sub { font-family: var(--mono); font-size: 12px; color: var(--dim); margin-top: 3px; }
+  .token .mint { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+
+  .gauges { display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; min-width: 200px; }
+  .gauge { display: grid; grid-template-columns: 86px 1fr 32px; gap: 8px; align-items: center;
+           font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .gauge .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .gauge .fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--purple));
+                 transition: width 600ms ease; }
+  .gauge .v { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .composite { display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+               font-family: var(--mono); }
+  .composite .score { font-size: 36px; font-weight: 600; color: var(--text);
+                      font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+                      transition: color 400ms ease; }
+  .composite .label { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; }
+  .composite.t-green .score { color: var(--teal); }
+  .composite.t-amber .score { color: var(--amber); }
+  .composite.t-red .score { color: var(--red); text-shadow: 0 0 24px rgba(255, 56, 96, 0.4); }
+
+  aside { display: flex; flex-direction: column; gap: 18px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+           padding: 18px 20px; }
+  .panel h3 { margin: 0 0 12px 0; font-size: 12px; letter-spacing: 0.08em;
+              text-transform: uppercase; color: var(--dim); font-weight: 500;
+              font-family: var(--mono); }
+  .stat { display: flex; justify-content: space-between; align-items: baseline;
+          padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .stat:last-child { border-bottom: 0; }
+  .stat .k { color: var(--dim); font-family: var(--mono); font-size: 12px; }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+             color: var(--text); font-size: 13px; }
+
+  .signal-card { display: grid; grid-template-columns: 1fr auto; gap: 6px;
+                 padding: 10px 12px; border-radius: 10px;
+                 background: var(--panel-2); margin-bottom: 6px; }
+  .signal-card .desc { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .signal-card .weight { font-family: var(--mono); font-size: 11px; color: var(--purple); }
+
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 56, 96, 0); }
+    50% { box-shadow: 0 0 28px 2px rgba(255, 56, 96, 0.45); }
+  }
+
+  footer { margin-top: 24px; text-align: center; font-family: var(--mono);
+           font-size: 11px; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Monitor</h1>
+    <span class="sub">bags.fm live risk feed</span>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <span class="badge live" id="liveBadge">live</span>
+    <span class="badge demo" id="demoBadge" style="display:none;">demo mode</span>
+  </div>
+</header>
+
+<div class="meta-row">
+  <span>updated <b id="ts">—</b></span>
+  <span>tokens <b id="count">0</b></span>
+  <span>alerts <b id="alerts">0</b></span>
+  <span>avg risk <b id="avg">0.0</b></span>
+  <span>bags api key <b id="apiKey">—</b></span>
+</div>
+
+<main>
+  <div class="feed" id="feed"></div>
+
+  <aside>
+    <div class="panel">
+      <h3>composite risk signals</h3>
+      <div class="signal-card"><div><div>launch_velocity</div><div class="desc">volume ramp vs. avg launch</div></div><div class="weight">w 0.30</div></div>
+      <div class="signal-card"><div><div>fee_accumulation</div><div class="desc">lifetime fees collected</div></div><div class="weight">w 0.25</div></div>
+      <div class="signal-card"><div><div>liquidity_depth</div><div class="desc">pool TVL vs. market cap</div></div><div class="weight">w 0.25</div></div>
+      <div class="signal-card"><div><div>volatility</div><div class="desc">price trajectory variance</div></div><div class="weight">w 0.20</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>thresholds</h3>
+      <div class="stat"><span class="k">alert threshold</span><span class="v">≥ 60</span></div>
+      <div class="stat"><span class="k">warn threshold</span><span class="v">≥ 40</span></div>
+      <div class="stat"><span class="k">deep analysis</span><span class="v">→ miroshark swarm</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>service</h3>
+      <div class="stat"><span class="k">monitor</span><span class="v" id="svcMonitor">checking…</span></div>
+      <div class="stat"><span class="k">miroshark</span><span class="v" id="svcMS">—</span></div>
+      <div class="stat"><span class="k">polling</span><span class="v">2.0 s</span></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  zero human labs · monitor × miroshark · bags hackathon 2026
+</footer>
+
+<script>
+const API = "http://localhost:8402";
+const DEMO = new URLSearchParams(location.search).has("demo");
+
+if (DEMO) document.getElementById("demoBadge").style.display = "inline-flex";
+
+const feedEl = document.getElementById("feed");
+const tsEl = document.getElementById("ts");
+const countEl = document.getElementById("count");
+const alertsEl = document.getElementById("alerts");
+const avgEl = document.getElementById("avg");
+const apiKeyEl = document.getElementById("apiKey");
+
+const tokenEls = new Map();
+let tick = 0;
+
+// Deterministic hash → [0,1) used for demo-mode synthetic scoring
+function h32(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+function seeded(mint, ch, t) {
+  return ((h32(mint + ":" + ch) + Math.floor(t / 8)) % 1000) / 1000;
+}
+function synthesize(tok, t) {
+  const base = seeded(tok.token_mint, "base", t);
+  const drift = Math.sin((t + h32(tok.token_mint) % 60) / 6) * 0.5 + 0.5;
+  const lv = Math.min(100, base * 100 * (0.6 + drift * 0.7));
+  const fee = Math.min(100, seeded(tok.token_mint, "f", t) * 100 * (0.5 + drift * 0.6));
+  const liq = Math.min(100, seeded(tok.token_mint, "l", t) * 100 * (0.4 + (1 - drift) * 0.8));
+  const vol = Math.min(100, seeded(tok.token_mint, "v", t) * 100 * (0.5 + drift * 0.8));
+  const comp = 0.30 * lv + 0.25 * fee + 0.25 * liq + 0.20 * vol;
+  return {
+    risk_score: +comp.toFixed(1),
+    component_scores: {
+      launch_velocity: +lv.toFixed(1),
+      fee_accumulation: +fee.toFixed(1),
+      liquidity_depth: +liq.toFixed(1),
+      volatility: +vol.toFixed(1),
+    },
+    alerts: comp >= 60 ? ["composite risk above alert threshold"] : [],
+  };
+}
+
+function shortMint(m) { return m.slice(0, 4) + "…" + m.slice(-4); }
+function tier(score) {
+  if (score >= 60) return "red";
+  if (score >= 40) return "amber";
+  return "green";
+}
+
+function makeTokenEl(tok) {
+  const el = document.createElement("div");
+  el.className = "token";
+  el.innerHTML = `
+    <div class="img"><img loading="lazy" /></div>
+    <div>
+      <div class="name"></div>
+      <div class="sub"></div>
+      <div class="mint" style="margin-top:6px;"></div>
+    </div>
+    <div class="gauges">
+      ${["launch_velocity","fee_accumulation","liquidity_depth","volatility"]
+        .map(c => `<div class="gauge"><span>${c}</span><div class="bar"><div class="fill" data-c="${c}"></div></div><span class="v" data-cv="${c}">0</span></div>`)
+        .join("")}
+    </div>
+    <div class="composite">
+      <div class="score">0.0</div>
+      <div class="label">composite risk</div>
+    </div>`;
+  return el;
+}
+
+function paintToken(el, tok) {
+  const img = el.querySelector(".img img");
+  const imgWrap = el.querySelector(".img");
+  if (tok.image) {
+    img.src = tok.image;
+    img.onerror = () => { img.remove(); imgWrap.textContent = (tok.symbol || "?").slice(0, 4); };
+  } else {
+    if (img) img.remove();
+    imgWrap.textContent = (tok.symbol || "?").slice(0, 4);
+  }
+  el.querySelector(".name").textContent = tok.name || "(unnamed)";
+  el.querySelector(".sub").textContent = (tok.symbol || "") + "  ·  " + (tok.status || "");
+  el.querySelector(".mint").textContent = shortMint(tok.token_mint);
+
+  for (const c of ["launch_velocity","fee_accumulation","liquidity_depth","volatility"]) {
+    const v = tok.component_scores?.[c] ?? 0;
+    el.querySelector(`.fill[data-c="${c}"]`).style.width = Math.min(100, v) + "%";
+    el.querySelector(`.v[data-cv="${c}"]`).textContent = v.toFixed(0);
+  }
+
+  const score = tok.risk_score ?? 0;
+  const t = tier(score);
+  const comp = el.querySelector(".composite");
+  comp.classList.remove("t-green", "t-amber", "t-red");
+  comp.classList.add("t-" + t);
+  comp.querySelector(".score").textContent = score.toFixed(1);
+
+  el.classList.remove("alert", "warn");
+  if (score >= 60) el.classList.add("alert");
+  else if (score >= 40) el.classList.add("warn");
+}
+
+async function poll() {
+  tick += 1;
+  try {
+    const r = await fetch(`${API}/api/v1/tokens/launches?limit=12`);
+    const data = await r.json();
+    apiKeyEl.textContent = data.bags_api_key_configured ? "configured" : "not configured";
+
+    let tokens = data.tokens || [];
+    if (DEMO) {
+      tokens = tokens.map(t => ({ ...t, ...synthesize(t, tick) }));
+    }
+    tokens.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+
+    let alertCount = 0;
+    const seen = new Set();
+    for (const tok of tokens) {
+      seen.add(tok.token_mint);
+      let el = tokenEls.get(tok.token_mint);
+      if (!el) {
+        el = makeTokenEl(tok);
+        tokenEls.set(tok.token_mint, el);
+      }
+      paintToken(el, tok);
+      if ((tok.risk_score ?? 0) >= 60) alertCount++;
+    }
+
+    // Re-order DOM by current sort
+    feedEl.replaceChildren(...tokens.map(t => tokenEls.get(t.token_mint)));
+
+    // Reap removed
+    for (const k of [...tokenEls.keys()]) if (!seen.has(k)) tokenEls.delete(k);
+
+    const avg = tokens.length
+      ? (tokens.reduce((s, t) => s + (t.risk_score || 0), 0) / tokens.length).toFixed(1)
+      : "0.0";
+    tsEl.textContent = new Date((data.timestamp || Date.now() / 1000) * 1000).toLocaleTimeString();
+    countEl.textContent = tokens.length;
+    alertsEl.textContent = alertCount;
+    avgEl.textContent = avg;
+    document.getElementById("svcMonitor").textContent = "ok";
+  } catch (e) {
+    document.getElementById("svcMonitor").textContent = "unreachable";
+  }
+}
+
+async function pollMiroShark() {
+  try {
+    const r = await fetch(`${API}/health`);
+    if (r.ok) document.getElementById("svcMS").textContent = "via monitor";
+  } catch { /* ignore */ }
+}
+
+poll(); pollMiroShark();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html><html><head>
+<meta charset="utf-8" /><title>x402 — terminal flow</title>
+<link rel="stylesheet" href="_common.css" />
+<style>
+body { background: #050510; }
+.term-frame { position: fixed; inset: 0; padding: 60px; display: flex; flex-direction: column; }
+.term { flex: 1; background: #0a0a14; border: 1px solid var(--line); border-radius: 14px;
+        padding: 24px 28px; font: 22px/1.55 var(--mono); color: var(--text); overflow: hidden;
+        box-shadow: 0 0 80px rgba(153,69,255,0.08), inset 0 0 60px rgba(20,241,149,0.02); position: relative; }
+.term .head { position: absolute; top: 12px; left: 16px; display: flex; gap: 8px; }
+.term .head .d { width: 12px; height: 12px; border-radius: 50%; }
+.term .head .d.r { background: #ff5f57; } .term .head .d.y { background: #febc2e; } .term .head .d.g { background: #28c840; }
+.term .title { position: absolute; top: 14px; left: 0; right: 0; text-align: center; color: var(--dim); font-size: 13px; }
+.term .body { margin-top: 36px; }
+.line { white-space: pre-wrap; }
+.prompt { color: var(--teal); font-weight: 600; }
+.cmd { color: var(--text); }
+.flag { color: var(--purple); }
+.str { color: var(--amber); }
+.dim { color: var(--dim); }
+.err { color: var(--red); font-weight: 600; }
+.ok { color: var(--teal); font-weight: 600; }
+.header-line { color: #9bb4ff; }
+.json-key { color: var(--purple); }
+.json-str { color: var(--teal); }
+.json-num { color: var(--amber); }
+.cursor { display: inline-block; width: 10px; height: 22px; vertical-align: -4px; background: var(--teal); margin-left: 2px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.banner { display: inline-block; padding: 2px 10px; border: 1px solid currentColor; border-radius: 4px; font-size: 16px; margin-left: 6px; }
+.kbd { padding: 1px 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; font-size: 16px; color: var(--dim); }
+</style></head><body>
+<div class="term-frame">
+  <div class="term">
+    <div class="head"><span class="d r"></span><span class="d y"></span><span class="d g"></span></div>
+    <div class="title">claude — solana-gateway — 100×30</div>
+    <div class="body" id="body"></div>
+  </div>
+</div>
+<script>
+const body = document.getElementById("body");
+
+// Timeline of lines + when to start typing each (ms from t=0)
+// Some lines type out char-by-char; some are instant (server responses).
+const script = [
+  { at: 200, type: "typing", speed: 24, html: '<span class="prompt">$</span> <span class="cmd">curl -s -i</span> <span class="flag">-X</span> POST \\' },
+  { at: 1900, type: "typing", speed: 22, html: '    <span class="str">"http://localhost:3403/api/v1/tokens/deep-analysis/HKQ...BAGS"</span>' },
+  { at: 4400, type: "instant", html: '' },
+  { at: 4500, type: "instant", html: '<span class="header-line">HTTP/1.1 402 Payment Required</span>' },
+  { at: 4700, type: "instant", html: '<span class="header-line">x-402-network:</span> <span class="cmd">solana-devnet</span>' },
+  { at: 4900, type: "instant", html: '<span class="header-line">x-402-amount:</span>  <span class="cmd">0.01 USDC</span>' },
+  { at: 5100, type: "instant", html: '<span class="header-line">x-402-receiver:</span> <span class="cmd">9xK...Lq2</span>' },
+  { at: 5300, type: "instant", html: '<span class="header-line">content-type:</span>  <span class="cmd">application/json</span>' },
+  { at: 5500, type: "instant", html: '<span class="dim">{"error":"payment required","price_usdc":"0.01","memo":"sim:HKQ...BAGS"}</span>' },
+  { at: 5900, type: "instant", html: '' },
+  { at: 6200, type: "typing", speed: 22, html: '<span class="prompt">$</span> <span class="cmd">x402 pay</span> <span class="flag">--network</span> solana-devnet <span class="flag">--amount</span> 0.01' },
+  { at: 8800, type: "instant", html: '<span class="dim">→ signing transaction with wallet 9xK7..Lq2…</span>' },
+  { at: 9200, type: "instant", html: '<span class="ok">✓</span> <span class="cmd">tx confirmed</span> <span class="dim">5x9pK..U3Vt</span> <span class="kbd">slot 308724112</span>' },
+  { at: 9700, type: "instant", html: '' },
+  { at: 9900, type: "typing", speed: 18, html: '<span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-H</span> <span class="str">"x-payment: 5x9pK..U3Vt"</span> <span class="str">"…deep-analysis/HKQ...BAGS"</span>' },
+  { at: 12300, type: "instant", html: '' },
+  { at: 12400, type: "instant", html: '<span class="header-line">HTTP/1.1 200 OK</span> <span class="banner ok">PAID</span>' },
+  { at: 12600, type: "instant", html: '<span class="header-line">x-payment-verified:</span> <span class="cmd">5x9pK..U3Vt</span>' },
+  { at: 12800, type: "instant", html: '<span class="header-line">content-type:</span> <span class="cmd">application/json</span>' },
+  { at: 13000, type: "instant", html: '' },
+  { at: 13100, type: "instant", html: '{' },
+  { at: 13200, type: "instant", html: '  <span class="json-key">"token_mint"</span>: <span class="json-str">"HKQ...BAGS"</span>,' },
+  { at: 13300, type: "instant", html: '  <span class="json-key">"composite_risk"</span>: <span class="json-num">82.3</span>,' },
+  { at: 13400, type: "instant", html: '  <span class="json-key">"consensus"</span>: <span class="json-str">"rug-prone"</span>,' },
+  { at: 13500, type: "instant", html: '  <span class="json-key">"confidence"</span>: <span class="json-num">0.78</span>,' },
+  { at: 13600, type: "instant", html: '  <span class="json-key">"simulation_id"</span>: <span class="json-str">"sim-7f3a"</span>,' },
+  { at: 13700, type: "instant", html: '  <span class="json-key">"explorer"</span>: <span class="json-str">"https://explorer.solana.com/tx/5x9pK..U3Vt?cluster=devnet"</span>' },
+  { at: 13800, type: "instant", html: '}' },
+  { at: 14100, type: "cursor-on" },
+];
+
+function appendBlank() { const d = document.createElement("div"); d.className = "line"; body.appendChild(d); return d; }
+
+async function typeInto(div, html, speed) {
+  // Parse HTML, then reveal char-by-char while preserving tags.
+  div.innerHTML = "";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  const out = div;
+  async function recurse(srcNode, dst) {
+    for (const child of [...srcNode.childNodes]) {
+      if (child.nodeType === 3) {
+        for (const ch of child.textContent) {
+          dst.appendChild(document.createTextNode(ch));
+          await new Promise(r => setTimeout(r, speed));
+        }
+      } else {
+        const el = document.createElement(child.tagName);
+        for (const a of child.attributes) el.setAttribute(a.name, a.value);
+        dst.appendChild(el);
+        await recurse(child, el);
+      }
+    }
+  }
+  await recurse(tmp, out);
+}
+
+let cursorEl = null;
+function showCursor(div) {
+  if (cursorEl) cursorEl.remove();
+  cursorEl = document.createElement("span");
+  cursorEl.className = "cursor";
+  div.appendChild(cursorEl);
+}
+function removeCursor() { if (cursorEl) { cursorEl.remove(); cursorEl = null; } }
+
+(async () => {
+  for (const step of script) {
+    await new Promise(r => setTimeout(r, Math.max(0, step.at - performance.now())));
+    if (step.type === "cursor-on") { const last = body.lastElementChild || appendBlank(); showCursor(last); continue; }
+    const line = appendBlank();
+    if (step.type === "typing") {
+      removeCursor();
+      await typeInto(line, step.html, step.speed);
+      showCursor(line);
+    } else {
+      removeCursor();
+      line.innerHTML = step.html;
+      showCursor(line);
+    }
+  }
+})();
+</script>
+</body></html>

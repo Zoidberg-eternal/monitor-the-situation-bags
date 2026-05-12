@@ -1,0 +1,378 @@
+<!doctype html><html><head>
+<meta charset="utf-8" /><title>Hook — Bags.fm launch → rug</title>
+<link rel="stylesheet" href="_common.css" />
+<style>
+body { background: #050510; }
+.hook-frame { position: fixed; inset: 0; padding: 0; overflow: hidden; }
+.stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.fade { transition: opacity 600ms ease; opacity: 0; }
+.fade.in { opacity: 1; }
+
+/* Phase 1 — single token card */
+.tcard { width: 980px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 18px; padding: 36px 40px; box-shadow: 0 0 80px rgba(153,69,255,0.15);
+         transform: scale(0.86); opacity: 0; transition: transform 700ms cubic-bezier(.2,1.2,.4,1), opacity 600ms ease; }
+.tcard.show { transform: scale(1); opacity: 1; }
+.tcard-head { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
+.tcard-head .avatar { width: 80px; height: 80px; border-radius: 18px;
+                      background: linear-gradient(135deg, #ffaa7a, #ff5577 70%);
+                      display: flex; align-items: center; justify-content: center;
+                      font: 800 28px/1 -apple-system, sans-serif; color: white;
+                      letter-spacing: 0.5px; }
+.tcard-head .name-block { flex: 1; }
+.tcard-head .name { font-size: 26px; font-weight: 700; }
+.tcard-head .meta { font: 13px/1.5 var(--mono); color: var(--dim); margin-top: 4px; }
+.tcard-head .badge { padding: 6px 12px; border: 1px solid var(--teal); color: var(--teal);
+                     border-radius: 999px; font: 11px var(--mono); letter-spacing: 0.08em;
+                     text-transform: uppercase; }
+.tcard-head .badge.rug { border-color: var(--red); color: var(--red);
+                         animation: rug-flash 200ms ease 0s 3; }
+@keyframes rug-flash { 50% { background: var(--red); color: white; } }
+.tcard-body { display: grid; grid-template-columns: 1fr 280px; gap: 26px; }
+.chart-area { position: relative; height: 280px; background: #0a0c1c;
+              border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow: hidden; }
+.chart-area svg { width: 100%; height: 100%; display: block; }
+.price-line { fill: none; stroke: var(--teal); stroke-width: 3;
+              filter: drop-shadow(0 0 6px var(--teal));
+              transition: stroke 400ms ease, filter 400ms ease; }
+.price-line.rug { stroke: var(--red); filter: drop-shadow(0 0 8px var(--red)); }
+.price-fill { fill: url(#pf); opacity: 0; transition: opacity 600ms; }
+.price-fill.show { opacity: 0.45; }
+.price-fill.rug { fill: url(#pfRug); }
+.price-readout { position: absolute; top: 18px; left: 22px; }
+.price-readout .price { font: 700 38px/1 var(--mono); color: var(--text);
+                        font-variant-numeric: tabular-nums; transition: color 400ms ease; }
+.price-readout .price.up { color: var(--teal); text-shadow: 0 0 14px var(--teal); }
+.price-readout .price.down { color: var(--red); text-shadow: 0 0 14px var(--red); }
+.price-readout .delta { font: 700 22px var(--mono); margin-top: 6px;
+                        font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 400ms ease; }
+.price-readout .delta.show { opacity: 1; }
+.price-readout .delta.up { color: var(--teal); }
+.price-readout .delta.down { color: var(--red); }
+.stats { display: flex; flex-direction: column; gap: 10px; font: 13px var(--mono); }
+.stats .row { display: flex; justify-content: space-between; padding: 10px 14px;
+              background: var(--panel-2); border-radius: 8px; }
+.stats .row .k { color: var(--dim); }
+.stats .row .v { color: var(--text); font-variant-numeric: tabular-nums; transition: color 400ms ease; }
+.stats .row .v.up { color: var(--teal); }
+.stats .row .v.down { color: var(--red); }
+
+.rug-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-12deg) scale(2);
+             padding: 18px 50px; border: 6px solid var(--red); color: var(--red);
+             font: 900 90px/1 -apple-system, sans-serif; letter-spacing: 0.06em;
+             border-radius: 14px; background: rgba(10,10,20,0.85);
+             opacity: 0; pointer-events: none;
+             text-shadow: 0 0 16px rgba(255,56,96,0.8);
+             box-shadow: 0 0 60px rgba(255,56,96,0.4); }
+.rug-stamp.show { animation: stamp-in 600ms cubic-bezier(.2,2,.4,1) forwards; }
+@keyframes stamp-in { to { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(1); } }
+
+/* Phase 2 — firehose montage */
+.firehose { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr); gap: 12px; padding: 24px;
+            opacity: 0; transition: opacity 800ms ease; }
+.firehose.show { opacity: 1; }
+.firehose .fcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+                   padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+                   font: 12px var(--mono); position: relative; overflow: hidden;
+                   animation: fc-pulse 1.6s ease infinite; }
+.firehose .fcard .sym { font: 700 16px/1 -apple-system, sans-serif; color: var(--text); }
+.firehose .fcard .mint { color: var(--dim); font-size: 10px; }
+.firehose .fcard .score { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.firehose .fcard .score .label { color: var(--dim); }
+.firehose .fcard .score .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px;
+                                background: rgba(20,241,149,0.15); color: var(--teal); }
+.firehose .fcard .score .pill.warn { background: rgba(255,176,32,0.15); color: var(--amber); }
+.firehose .fcard .score .pill.red  { background: rgba(255,56,96,0.18);  color: var(--red); }
+.firehose .fcard .mini { height: 24px; margin-top: auto; opacity: 0.7; }
+.firehose .fcard .mini path { stroke: var(--teal); stroke-width: 1.5; fill: none; }
+@keyframes fc-pulse { 50% { border-color: var(--purple-dim); } }
+
+/* Outro card pointing to Monitor */
+.outro-pointer { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+                 padding: 12px 22px; border: 1px solid var(--purple); border-radius: 999px;
+                 font: 13px var(--mono); color: var(--purple); letter-spacing: 0.08em;
+                 text-transform: uppercase; opacity: 0; transition: opacity 600ms; }
+.outro-pointer.show { opacity: 1; }
+
+/* On-screen overlays per script */
+.script-overlay { position: absolute; left: 48px; bottom: 36px; font: 13px var(--mono); color: var(--dim);
+                  letter-spacing: 0.12em; opacity: 0; transition: opacity 400ms ease; }
+.script-overlay.show { opacity: 1; }
+.script-overlay b { color: var(--text); font-weight: 500; }
+
+.platform-pill { position: absolute; top: 36px; left: 48px; padding: 6px 14px;
+                 background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 999px;
+                 font: 11px var(--mono); color: var(--dim); letter-spacing: 0.1em;
+                 text-transform: uppercase; opacity: 0; transition: opacity 400ms ease; }
+.platform-pill.show { opacity: 1; }
+.platform-pill::before { content: "bags.fm "; color: var(--teal); }
+</style></head><body>
+<div class="hook-frame">
+  <div class="platform-pill" id="platform">live launch feed</div>
+
+  <!-- PHASE A — single token rise + rug -->
+  <div class="stage" id="stageA">
+    <div class="tcard" id="card">
+      <div class="tcard-head">
+        <div class="avatar">B</div>
+        <div class="name-block">
+          <div class="name">Bag of Tricks</div>
+          <div class="meta">$BOTR · HKQSi9kbDJ…BAGS</div>
+        </div>
+        <div class="badge" id="cardBadge">just launched</div>
+      </div>
+      <div class="tcard-body">
+        <div class="chart-area">
+          <div class="price-readout">
+            <div class="price" id="price">$0.000028</div>
+            <div class="delta" id="delta">+0.0%</div>
+          </div>
+          <svg viewBox="0 0 600 240" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="pf" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#14f195" stop-opacity="0.6" />
+                <stop offset="100%" stop-color="#14f195" stop-opacity="0" />
+              </linearGradient>
+              <linearGradient id="pfRug" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#ff3860" stop-opacity="0.55" />
+                <stop offset="100%" stop-color="#ff3860" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="price-fill" id="fill" d=""></path>
+            <path class="price-line" id="line" d=""></path>
+          </svg>
+          <div class="rug-stamp" id="rug">RUGGED</div>
+        </div>
+        <div class="stats">
+          <div class="row"><span class="k">market cap</span><span class="v" id="mcap">$28k</span></div>
+          <div class="row"><span class="k">pool tvl</span><span class="v" id="tvl">$45k</span></div>
+          <div class="row"><span class="k">fees (24h)</span><span class="v" id="fees">0.04 SOL</span></div>
+          <div class="row"><span class="k">holders</span><span class="v" id="holders">312</span></div>
+          <div class="row"><span class="k">since launch</span><span class="v" id="age">00:00:18</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE B — firehose -->
+  <div class="firehose" id="firehose"></div>
+
+  <div class="outro-pointer" id="pointer">→ monitor the situation</div>
+  <div class="script-overlay" id="overlay"><span id="overlayText"></span></div>
+</div>
+
+<script>
+// ===== Phase A: token card animation =====
+const W = 600, H = 240;
+// Build a smooth path from (t0..t1) with shape function
+function buildPath(samples) {
+  // samples: array of [x in [0..1], y in [0..1]] where y=0 is top, y=1 is bottom
+  return samples.map((s, i) => `${i === 0 ? "M" : "L"}${(s[0] * W).toFixed(1)},${(s[1] * H).toFixed(1)}`).join(" ");
+}
+function buildFillPath(samples) {
+  const top = samples.map((s, i) => `${i === 0 ? "M" : "L"}${(s[0] * W).toFixed(1)},${(s[1] * H).toFixed(1)}`).join(" ");
+  return top + ` L${W},${H} L0,${H} Z`;
+}
+
+const card = document.getElementById("card");
+const badge = document.getElementById("cardBadge");
+const line = document.getElementById("line");
+const fill = document.getElementById("fill");
+const priceEl = document.getElementById("price");
+const deltaEl = document.getElementById("delta");
+const mcapEl = document.getElementById("mcap");
+const tvlEl = document.getElementById("tvl");
+const feesEl = document.getElementById("fees");
+const holdersEl = document.getElementById("holders");
+const ageEl = document.getElementById("age");
+const rugStamp = document.getElementById("rug");
+const overlay = document.getElementById("overlay");
+const overlayText = document.getElementById("overlayText");
+const platform = document.getElementById("platform");
+const pointer = document.getElementById("pointer");
+const firehose = document.getElementById("firehose");
+const stageA = document.getElementById("stageA");
+
+function setOverlay(text) {
+  if (!text) { overlay.classList.remove("show"); return; }
+  overlayText.textContent = text;
+  overlay.classList.add("show");
+}
+
+// Time-driven keyframes — total ~12s but main beats at 0–7s, then transition to firehose
+const startedAt = performance.now();
+let phase = "A"; // A=card, B=firehose
+
+const t0 = 0.2;       // card appears
+const tRise = 1.6;    // pump starts
+const tPeak = 4.6;    // peak +400%
+const tRug = 5.4;     // rug starts
+const tBottom = 7.0;  // bottom
+const tFirehose = 7.8; // switch to firehose
+
+const samples = []; // populated as we animate
+
+function step(now) {
+  const t = (now - startedAt) / 1000;
+
+  // Platform pill always visible after 0.1s
+  if (t > 0.1) platform.classList.add("show");
+  // Card pops in
+  if (t > t0) card.classList.add("show");
+
+  // Overlay copy timing (matches VO narration cadence)
+  if (t > 0.4 && t < 2.0) setOverlay("\"a new token just launched on bags.fm\"");
+  else if (t > 2.0 && t < 4.6) setOverlay("\"30 seconds later — up 400%\"");
+  else if (t > 5.0 && t < 7.5) setOverlay("\"30 seconds later — rugged\"");
+  else if (t > 8.0 && t < 12.5) setOverlay("\"humans can't keep up — but an ai swarm can\"");
+  else if (t > 12.8 && t < 16.5) setOverlay("hundreds of bags.fm launches every hour →");
+  else setOverlay("");
+
+  // Phase A: drive chart
+  if (phase === "A" && t < tFirehose) {
+    let progress = 0; // 0=launch, 1=peak, 2=bottom
+    let priceMul = 1;
+    if (t < t0) priceMul = 1;
+    else if (t < tRise) priceMul = 1 + (t - t0) / (tRise - t0) * 0.05; // tiny pre-pump wiggle
+    else if (t < tPeak) {
+      const k = (t - tRise) / (tPeak - tRise);
+      const eased = 1 - Math.pow(1 - k, 2.5);
+      priceMul = 1 + eased * 4.0;  // → ~5x = +400%
+    }
+    else if (t < tRug) priceMul = 5.0;
+    else if (t < tBottom) {
+      const k = (t - tRug) / (tBottom - tRug);
+      const eased = Math.pow(k, 1.6);
+      priceMul = 5.0 - eased * 4.85; // crash to ~0.15x
+    } else {
+      priceMul = 0.15;
+    }
+
+    // Push a sample every frame (compressed timeline)
+    const x = Math.min(1, (t - t0) / (tBottom - t0));
+    if (x >= 0) {
+      const y = 1 - Math.min(0.96, (priceMul - 1) / 4.0 * 0.85 + 0.04);
+      samples.push([x, y]);
+      const pathStr = buildPath(samples);
+      line.setAttribute("d", pathStr);
+      fill.setAttribute("d", buildFillPath(samples));
+      if (samples.length > 4 && !fill.classList.contains("show")) fill.classList.add("show");
+    }
+
+    // Update price readout / stats
+    const basePrice = 0.000028;
+    const p = basePrice * priceMul;
+    priceEl.textContent = "$" + p.toFixed(p < 0.0001 ? 7 : 6);
+    const delta = (priceMul - 1) * 100;
+    deltaEl.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(0) + "%";
+    deltaEl.classList.add("show");
+    if (delta >= 0) {
+      priceEl.classList.add("up"); priceEl.classList.remove("down");
+      deltaEl.classList.add("up"); deltaEl.classList.remove("down");
+    } else {
+      priceEl.classList.add("down"); priceEl.classList.remove("up");
+      deltaEl.classList.add("down"); deltaEl.classList.remove("up");
+    }
+
+    const mcap = (28000 * priceMul) | 0;
+    mcapEl.textContent = "$" + (mcap >= 1000 ? (mcap / 1000).toFixed(0) + "k" : mcap);
+    mcapEl.classList.toggle("up", priceMul > 1); mcapEl.classList.toggle("down", priceMul < 1);
+
+    const tvl = (45000 * (priceMul < 1 ? Math.max(0.05, priceMul) : priceMul * 1.0)) | 0;
+    tvlEl.textContent = "$" + (tvl >= 1000 ? (tvl / 1000).toFixed(0) + "k" : tvl);
+    tvlEl.classList.toggle("up", priceMul > 1); tvlEl.classList.toggle("down", priceMul < 1);
+
+    feesEl.textContent = (0.04 + priceMul * 0.08).toFixed(2) + " SOL";
+    holdersEl.textContent = Math.round(312 + priceMul * 180);
+
+    // age timer
+    const secs = Math.round(18 + t * 6);
+    ageEl.textContent = "00:" + String(Math.floor(secs / 60)).padStart(2, "0") + ":" + String(secs % 60).padStart(2, "0");
+
+    // Trigger badge + rug stamp + line color shift at rug start
+    if (t >= tRug && !rugStamp.classList.contains("show")) {
+      badge.classList.add("rug");
+      badge.textContent = "rugged";
+      line.classList.add("rug");
+      fill.classList.add("rug");
+      rugStamp.classList.add("show");
+    }
+  }
+
+  // Phase B: firehose
+  if (t >= tFirehose && phase === "A") {
+    phase = "B";
+    stageA.style.transition = "opacity 500ms ease, transform 500ms ease";
+    stageA.style.opacity = "0";
+    stageA.style.transform = "scale(0.92)";
+    firehose.classList.add("show");
+    buildFirehose();
+  }
+  if (t >= tFirehose) {
+    refreshFirehose(t);
+    if (t >= 9.2) pointer.classList.add("show");
+  }
+
+  if (t < 18) requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+
+// Firehose grid
+const fcards = [];
+function buildFirehose() {
+  const seeds = [
+    ["TOAST", "Toasted Toonz", "6FE8…BAGS"],
+    ["TRLL",  "Trollieve",     "FKc9…BAGS"],
+    ["BAG",   "bag",           "HKQS…BAGS"],
+    ["ZULU",  "ZuluFunds",     "Ax8Y…BAGS"],
+    ["MOCH",  "MochaCoin",     "B92M…BAGS"],
+    ["FRT",   "Ferret Inu",    "Cdy7…BAGS"],
+    ["PMP",   "Pump Lab",      "9p3N…BAGS"],
+    ["GOR",   "Gorilla Glue",  "K2tH…BAGS"],
+    ["DEMO",  "Democraco",     "RfN6…BAGS"],
+    ["LANE",  "Solana Lane",   "WqL8…BAGS"],
+    ["RUG",   "WontRug Sir",   "Vx4J…BAGS"],
+    ["AGI",   "Open AGI",      "Mr2K…BAGS"],
+  ];
+  seeds.forEach((s, i) => {
+    const el = document.createElement("div");
+    el.className = "fcard";
+    el.style.animationDelay = (i * 0.13) + "s";
+    el.innerHTML = `
+      <div style="display:flex; justify-content:space-between;">
+        <span class="sym">$${s[0]}</span>
+        <span class="mint" id="mintage-${i}">live · ${(Math.random() * 60) | 0}s</span>
+      </div>
+      <div class="mint">${s[1]}</div>
+      <div class="mint">${s[2]}</div>
+      <div class="score"><span class="label">risk</span><span class="pill" id="pill-${i}">—</span></div>
+      <svg class="mini" viewBox="0 0 80 24" preserveAspectRatio="none">
+        <path id="mini-${i}" d=""></path>
+      </svg>`;
+    firehose.appendChild(el);
+    fcards.push({ el, seed: i, lastUpdate: 0 });
+  });
+}
+function refreshFirehose(t) {
+  for (const f of fcards) {
+    if (t - f.lastUpdate < 0.45) continue;
+    f.lastUpdate = t;
+    const score = Math.round((Math.sin(t * 1.3 + f.seed * 1.7) * 0.5 + 0.5) * 90 + (f.seed % 3) * 5);
+    const pill = f.el.querySelector(".pill");
+    pill.textContent = score;
+    pill.className = "pill " + (score >= 60 ? "red" : score >= 40 ? "warn" : "");
+    // tiny sparkline
+    const path = f.el.querySelector(".mini path");
+    const pts = [];
+    for (let i = 0; i <= 12; i++) {
+      const k = i / 12;
+      const y = 22 - Math.abs(Math.sin(t * 2 + f.seed + k * 4)) * 16 - 4;
+      pts.push(`${i === 0 ? "M" : "L"}${(k * 80).toFixed(1)},${y.toFixed(1)}`);
+    }
+    path.setAttribute("d", pts.join(" "));
+    path.style.stroke = score >= 60 ? "#ff3860" : score >= 40 ? "#ffb020" : "#14f195";
+  }
+}
+</script>
+</body></html>

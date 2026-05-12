@@ -1,0 +1,32 @@
+:root {
+  --bg: #0a0a14;
+  --bg-2: #11111c;
+  --panel: #15152a;
+  --panel-2: #1f1f38;
+  --purple: #9945ff;
+  --purple-dim: #6a30b3;
+  --teal: #14f195;
+  --teal-dim: #0c9d62;
+  --amber: #ffb020;
+  --red: #ff3860;
+  --text: #f5f5fa;
+  --dim: #8a8aa0;
+  --line: #2a2a3a;
+  --mono: "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+             font-family: -apple-system, "Helvetica Neue", sans-serif;
+             -webkit-font-smoothing: antialiased; overflow: hidden;
+             width: 1920px; height: 1080px; }
+.frame { position: fixed; inset: 0; padding: 36px 48px; display: flex; flex-direction: column; }
+.chrome { display: flex; align-items: center; gap: 10px;
+          font-family: var(--mono); font-size: 12px; color: var(--dim);
+          padding: 10px 16px; background: var(--bg-2); border: 1px solid var(--line);
+          border-radius: 10px 10px 0 0; }
+.chrome .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.chrome .dot.r { background: #ff5f57; } .chrome .dot.y { background: #febc2e; } .chrome .dot.g { background: #28c840; }
+.chrome .url { margin-left: 14px; opacity: 0.7; }
+.shell-frame { flex: 1; background: var(--panel); border: 1px solid var(--line);
+               border-top: 0; border-radius: 0 0 12px 12px; padding: 26px;
+               display: flex; flex-direction: column; }

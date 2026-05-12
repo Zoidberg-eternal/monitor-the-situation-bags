@@ -1,0 +1,215 @@
+<!doctype html><html><head>
+<meta charset="utf-8" /><title>Quartz — navigate</title>
+<link rel="stylesheet" href="_common.css" />
+<style>
+.layout { display: grid; grid-template-columns: 1fr 460px; gap: 22px; flex: 1; min-height: 0; }
+.graph { position: relative; background: radial-gradient(60% 70% at 50% 50%, rgba(153,69,255,0.08), transparent 70%), var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.graph svg { width: 100%; height: 100%; display: block; }
+.node circle { transition: r 600ms ease, fill 600ms ease, filter 600ms ease; }
+.node text { fill: var(--text); font: 14px var(--mono); pointer-events: none; }
+.edge { stroke: var(--purple-dim); stroke-width: 1.5; opacity: 0.55; fill: none; }
+.pulse { fill: var(--teal); filter: drop-shadow(0 0 6px var(--teal)); }
+.side { display: flex; flex-direction: column; gap: 18px; }
+.side .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.side h3 { margin: 0 0 12px; font: 12px/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); font-weight: 500; }
+.persona-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.persona-head .avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--purple), var(--teal)); display: flex; align-items: center; justify-content: center; font: 700 16px var(--mono); }
+.persona-head .name { font-size: 18px; font-weight: 600; }
+.persona-head .role { font: 11px var(--mono); color: var(--dim); }
+.belief-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.bar { display: grid; grid-template-columns: 86px 1fr 36px; gap: 10px; align-items: center; font: 11px var(--mono); color: var(--dim); }
+.bar .track { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar .fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--purple)); width: 0; animation: bar-fill 1.4s ease forwards; }
+.bar .v { text-align: right; color: var(--text); }
+.bar:nth-child(1) .fill { --w: 78%; animation-delay: 1.6s; } .bar:nth-child(1) .v { animation: v-num 1.4s ease 1.6s forwards; --to: '78'; }
+.bar:nth-child(2) .fill { --w: 64%; animation-delay: 1.9s; } .bar:nth-child(2) .v { animation: v-num 1.4s ease 1.9s forwards; --to: '64'; }
+.bar:nth-child(3) .fill { --w: 41%; animation-delay: 2.2s; } .bar:nth-child(3) .v { animation: v-num 1.4s ease 2.2s forwards; --to: '41'; }
+.bar:nth-child(4) .fill { --w: 29%; animation-delay: 2.5s; } .bar:nth-child(4) .v { animation: v-num 1.4s ease 2.5s forwards; --to: '29'; }
+@keyframes bar-fill { to { width: var(--w); } }
+.spark { width: 100%; height: 120px; margin-top: 8px; }
+.spark path { fill: none; stroke: var(--teal); stroke-width: 2; filter: drop-shadow(0 0 4px var(--teal)); stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw 3.5s ease 1.2s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.spark .fill { fill: url(#sparkfill); stroke: none; opacity: 0; animation: fade-in 1.4s ease 3s forwards; }
+@keyframes fade-in { to { opacity: 0.6; } }
+.legend { display: flex; gap: 16px; margin-top: 14px; font: 11px var(--mono); color: var(--dim); }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.legend .lp { background: var(--purple); }
+.legend .lt { background: var(--teal); }
+.hint { position: absolute; bottom: 22px; left: 22px; font: 11px var(--mono); color: var(--dim); display: flex; gap: 14px; align-items: center; }
+.hint .key { padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); }
+.crosshair { position: absolute; width: 28px; height: 28px; border: 2px solid var(--teal); border-radius: 50%; filter: drop-shadow(0 0 8px var(--teal)); opacity: 0; pointer-events: none; }
+</style></head><body>
+<div class="frame">
+  <div class="chrome">
+    <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+    <span class="url">quartz.zerohumanlabs.dev / sim-7f3a / personas</span>
+  </div>
+  <div class="shell-frame">
+    <div class="layout">
+      <div class="graph">
+        <svg viewBox="0 0 1000 760" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#9945ff" stop-opacity="0.5" />
+              <stop offset="100%" stop-color="#9945ff" stop-opacity="0" />
+            </radialGradient>
+            <linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#14f195" stop-opacity="0.6" />
+              <stop offset="100%" stop-color="#14f195" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <g id="edges"></g>
+          <g id="nodes"></g>
+          <g id="pulses"></g>
+        </svg>
+        <div class="crosshair" id="ch"></div>
+        <div class="hint">
+          <span><span class="key">click</span> persona</span>
+          <span><span class="key">⌘</span><span class="key">F</span> filter</span>
+          <span>round 4 / 8 · 124 personas active</span>
+        </div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <h3>selected persona</h3>
+          <div class="persona-head">
+            <div class="avatar">MT</div>
+            <div>
+              <div class="name">@momentum_trader_03</div>
+              <div class="role">momentum trader · cluster A</div>
+            </div>
+          </div>
+          <div class="legend">
+            <span><span class="dot lt"></span>bullish</span>
+            <span><span class="dot lp"></span>confidence</span>
+            <span>stance flipped: round 3 → 4</span>
+          </div>
+          <svg class="spark" viewBox="0 0 400 120" preserveAspectRatio="none">
+            <path d="M0,90 L60,86 L120,80 L180,62 L240,40 L300,32 L360,18 L400,12" />
+            <path class="fill" d="M0,90 L60,86 L120,80 L180,62 L240,40 L300,32 L360,18 L400,12 L400,120 L0,120 Z" />
+          </svg>
+        </div>
+        <div class="card">
+          <h3>belief weights — round 4</h3>
+          <div class="belief-bars">
+            <div class="bar"><span>pumps fast</span><div class="track"><div class="fill"></div></div><span class="v">78</span></div>
+            <div class="bar"><span>rugs soon</span><div class="track"><div class="fill"></div></div><span class="v">64</span></div>
+            <div class="bar"><span>devs known</span><div class="track"><div class="fill"></div></div><span class="v">41</span></div>
+            <div class="bar"><span>safe entry</span><div class="track"><div class="fill"></div></div><span class="v">29</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// Build graph nodes
+const personas = [
+  { id: "mt1", label: "momentum_trader_03", role: "momentum", cluster: 0 },
+  { id: "mt2", label: "momentum_trader_07", role: "momentum", cluster: 0 },
+  { id: "wh",  label: "whale_tracker_01",   role: "whale",    cluster: 1 },
+  { id: "wh2", label: "whale_tracker_05",   role: "whale",    cluster: 1 },
+  { id: "cn",  label: "contrarian_02",      role: "contra",   cluster: 2 },
+  { id: "cn2", label: "contrarian_09",      role: "contra",   cluster: 2 },
+  { id: "sh",  label: "shiller_04",         role: "shill",    cluster: 3 },
+  { id: "sh2", label: "shiller_11",         role: "shill",    cluster: 3 },
+  { id: "ca",  label: "conservative_06",    role: "conserv",  cluster: 4 },
+  { id: "ca2", label: "conservative_12",    role: "conserv",  cluster: 4 },
+  { id: "an",  label: "report_agent",       role: "react",    cluster: 5 },
+];
+const positions = {
+  mt1:[230,180], mt2:[320,280], wh:[580,170], wh2:[680,260],
+  cn:[820,400], cn2:[760,520], sh:[600,640], sh2:[490,580],
+  ca:[280,520], ca2:[180,420], an:[500,380]
+};
+const colors = { momentum:"#9945ff", whale:"#ffb020", contra:"#14f195", shill:"#ff3860", conserv:"#5a8dff", react:"#ffffff" };
+const edges = [
+  ["mt1","mt2"],["mt1","wh"],["mt2","wh2"],["wh","cn"],["wh2","cn2"],
+  ["cn","cn2"],["sh","sh2"],["sh","mt2"],["ca","ca2"],["ca2","cn2"],
+  ["mt1","an"],["wh","an"],["cn","an"],["sh","an"],["ca","an"]
+];
+const eG = document.getElementById("edges");
+const nG = document.getElementById("nodes");
+const pG = document.getElementById("pulses");
+const svgns = "http://www.w3.org/2000/svg";
+edges.forEach(([a,b], i) => {
+  const [ax,ay] = positions[a], [bx,by] = positions[b];
+  const ln = document.createElementNS(svgns, "line");
+  ln.setAttribute("x1", ax); ln.setAttribute("y1", ay);
+  ln.setAttribute("x2", ax); ln.setAttribute("y2", ay);
+  ln.setAttribute("class", "edge");
+  eG.appendChild(ln);
+  setTimeout(() => {
+    ln.animate([{ x2: ax, y2: ay }, { x2: bx, y2: by }], { duration: 800, fill: "forwards", easing: "ease-out" });
+    ln.setAttribute("x2", bx); ln.setAttribute("y2", by);
+  }, 200 + i * 70);
+});
+personas.forEach((p, i) => {
+  const [x, y] = positions[p.id];
+  const g = document.createElementNS(svgns, "g");
+  g.setAttribute("class", "node");
+  g.setAttribute("transform", `translate(${x},${y})`);
+  g.style.opacity = "0";
+  const halo = document.createElementNS(svgns, "circle");
+  halo.setAttribute("r", "26"); halo.setAttribute("fill", "url(#halo)");
+  const c = document.createElementNS(svgns, "circle");
+  c.setAttribute("r", p.role === "react" ? "18" : "12");
+  c.setAttribute("fill", colors[p.role]);
+  c.setAttribute("filter", `drop-shadow(0 0 8px ${colors[p.role]})`);
+  const t = document.createElementNS(svgns, "text");
+  t.setAttribute("text-anchor", "middle"); t.setAttribute("y", "34");
+  t.textContent = p.label;
+  g.appendChild(halo); g.appendChild(c); g.appendChild(t);
+  nG.appendChild(g);
+  setTimeout(() => {
+    g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, fill: "forwards" });
+    g.style.opacity = "1";
+  }, 100 + i * 80);
+});
+// Pulse messages along edges (belief propagation)
+function pulseEdge(a, b, color, delay) {
+  setTimeout(() => {
+    const [ax,ay] = positions[a], [bx,by] = positions[b];
+    const c = document.createElementNS(svgns, "circle");
+    c.setAttribute("class", "pulse");
+    c.setAttribute("r", "4");
+    c.setAttribute("cx", ax); c.setAttribute("cy", ay);
+    c.style.fill = color;
+    c.style.filter = `drop-shadow(0 0 8px ${color})`;
+    pG.appendChild(c);
+    c.animate([{ cx: ax, cy: ay, opacity: 1 }, { cx: bx, cy: by, opacity: 0.2 }], { duration: 1200, fill: "forwards", easing: "ease-out" });
+    setTimeout(() => c.remove(), 1300);
+  }, delay);
+}
+setTimeout(() => {
+  // round 1 propagation
+  pulseEdge("wh","cn","#14f195", 3000);
+  pulseEdge("mt1","wh","#9945ff", 3300);
+  pulseEdge("sh","mt2","#ff3860", 3700);
+  pulseEdge("cn","an","#14f195", 5500);
+  pulseEdge("wh","an","#ffb020", 5800);
+  pulseEdge("mt1","an","#9945ff", 6100);
+  // round 2
+  pulseEdge("ca","ca2","#5a8dff", 8200);
+  pulseEdge("ca2","cn2","#5a8dff", 8700);
+  pulseEdge("sh","an","#ff3860", 10500);
+  pulseEdge("ca","an","#5a8dff", 11000);
+  pulseEdge("mt1","wh","#9945ff", 12500);
+  pulseEdge("wh2","cn2","#ffb020", 13000);
+}, 0);
+// Crosshair selecting node at t=1s
+setTimeout(() => {
+  const ch = document.getElementById("ch");
+  const [x, y] = positions["mt1"];
+  // graph svg is 1000 wide / 760 tall in container; need to map to pixels
+  const graph = document.querySelector(".graph");
+  const rect = graph.getBoundingClientRect();
+  const sx = (x / 1000) * rect.width;
+  const sy = (y / 760) * rect.height;
+  ch.style.left = (sx - 14) + "px";
+  ch.style.top = (sy - 14) + "px";
+  ch.animate([{ opacity: 0, transform: "scale(2)" }, { opacity: 1, transform: "scale(1)" }], { duration: 400, fill: "forwards" });
+  ch.style.opacity = "1";
+}, 1200);
+</script>
+</body></html>

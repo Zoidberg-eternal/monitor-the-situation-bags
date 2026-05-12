@@ -1,0 +1,334 @@
+<!doctype html><html><head>
+<meta charset="utf-8" /><title>MiroShark — swarm</title>
+<link rel="stylesheet" href="_common.css" />
+<style>
+body { background: #050510; }
+.swarm-frame { position: fixed; inset: 0; padding: 24px 32px; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: 22px; padding: 12px 18px;
+          background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          font: 13px var(--mono); color: var(--dim); }
+.topbar .pill { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+                color: var(--text); }
+.topbar .live::before { content: "●"; color: var(--teal); margin-right: 6px; }
+.topbar .grow { margin-left: auto; }
+.layout { flex: 1; display: grid; grid-template-columns: 1fr 360px; gap: 18px; margin-top: 14px;
+          min-height: 0; }
+.canvas-wrap { position: relative; background: radial-gradient(60% 60% at 50% 50%, rgba(153,69,255,0.10), transparent 70%), #07071a;
+               border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; }
+.quad-label { position: absolute; font: 11px var(--mono); color: var(--dim); letter-spacing: 0.15em; text-transform: uppercase; }
+.quad-label.tl { top: 16px; left: 18px; }
+.quad-label.tr { top: 16px; right: 18px; }
+.quad-label.bl { bottom: 16px; left: 18px; }
+.quad-label.br { bottom: 16px; right: 18px; }
+.divider { position: absolute; background: rgba(60,60,90,0.35); }
+.divider.h { left: 0; right: 0; height: 1px; top: 50%; }
+.divider.v { top: 0; bottom: 0; width: 1px; left: 50%; }
+.rail { display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card h3 { margin: 0 0 12px; font: 11px var(--mono); letter-spacing: 0.1em;
+           text-transform: uppercase; color: var(--dim); font-weight: 500; }
+.layer { display: grid; grid-template-columns: 110px 1fr 26px; gap: 10px; align-items: center;
+         font: 11px var(--mono); color: var(--dim); margin: 7px 0; }
+.layer .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.layer .fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--purple)); width: 0;
+               transition: width 800ms ease; }
+.layer .v { text-align: right; color: var(--text); }
+.stance-grid { display: grid; grid-template-columns: 1fr 60px; gap: 6px; font: 12px var(--mono); }
+.stance-grid .name { color: var(--dim); }
+.stance-grid .pct { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.stance-bar-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 8px; }
+.stance-bar-row .seg { position: absolute; top: 0; bottom: 0; transition: left 700ms ease, width 700ms ease; }
+.stance-bar-row .seg.bear { background: var(--red); }
+.stance-bar-row .seg.bull { background: var(--teal); }
+.stance-bar-row .seg.neutral { background: var(--amber); }
+.stance-bar-row .seg.und { background: var(--purple); opacity: 0.7; }
+.consensus-callout { margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--teal); border-radius: 8px;
+                     font: 12px var(--mono); color: var(--text); opacity: 0; transition: opacity 600ms ease; }
+.consensus-callout.show { opacity: 1; }
+.consensus-callout b { color: var(--teal); }
+.ticker { display: flex; gap: 18px; font: 11px var(--mono); color: var(--dim); padding-top: 10px; }
+.ticker b { color: var(--text); font-weight: 500; }
+.round-bar { display: flex; gap: 4px; }
+.round-bar .seg { width: 22px; height: 5px; border-radius: 2px; background: var(--panel-2); }
+.round-bar .seg.on { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+</style></head><body>
+<div class="swarm-frame">
+  <div class="topbar">
+    <span class="pill live">simulation active</span>
+    <span>sim <b style="color:var(--text)">7f3a</b></span>
+    <span>round <b id="roundN" style="color:var(--text)">0</b> / 8</span>
+    <div class="round-bar" id="roundBar"></div>
+    <span>personas <b id="personaCt" style="color:var(--text)">0</b></span>
+    <span>messages/s <b id="msgRate" style="color:var(--text)">0</b></span>
+    <span class="grow">target token <b style="color:var(--text)">HKQ…BAGS</b></span>
+  </div>
+  <div class="layout">
+    <div class="canvas-wrap">
+      <canvas id="c" width="1600" height="900"></canvas>
+      <div class="divider h"></div>
+      <div class="divider v"></div>
+      <div class="quad-label tl">twitter</div>
+      <div class="quad-label tr">reddit</div>
+      <div class="quad-label bl">polymarket</div>
+      <div class="quad-label br">bags.fm</div>
+    </div>
+    <div class="rail">
+      <div class="card">
+        <h3>5-layer persona grounding</h3>
+        <div class="layer"><span>graph attrs</span><div class="bar"><div class="fill" id="L1"></div></div><span class="v" id="L1v">0</span></div>
+        <div class="layer"><span>relationships</span><div class="bar"><div class="fill" id="L2"></div></div><span class="v" id="L2v">0</span></div>
+        <div class="layer"><span>semantic</span><div class="bar"><div class="fill" id="L3"></div></div><span class="v" id="L3v">0</span></div>
+        <div class="layer"><span>related nodes</span><div class="bar"><div class="fill" id="L4"></div></div><span class="v" id="L4v">0</span></div>
+        <div class="layer"><span>live web</span><div class="bar"><div class="fill" id="L5"></div></div><span class="v" id="L5v">0</span></div>
+      </div>
+      <div class="card">
+        <h3>cross-platform stance distribution</h3>
+        <div class="stance-bar-row">
+          <div class="seg bear"     id="segBear"></div>
+          <div class="seg bull"     id="segBull"></div>
+          <div class="seg neutral"  id="segNeutral"></div>
+          <div class="seg und"      id="segUnd"></div>
+        </div>
+        <div class="stance-grid">
+          <div class="name" style="color:var(--red)">● rug-prone</div>
+          <div class="pct" id="pBear">—</div>
+          <div class="name" style="color:var(--teal)">● bullish</div>
+          <div class="pct" id="pBull">—</div>
+          <div class="name" style="color:var(--amber)">● cautious</div>
+          <div class="pct" id="pNeutral">—</div>
+          <div class="name" style="color:var(--purple)">● undecided</div>
+          <div class="pct" id="pUnd">—</div>
+        </div>
+        <div class="consensus-callout" id="callout">
+          consensus emerging: <b>rug-prone</b> · confidence rising
+        </div>
+        <div class="ticker">
+          <span>compaction <b id="compact">—</b></span>
+          <span>flips this round <b id="flips">0</b></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ---------- Swarm sim (visual only, deterministic over time) ----------
+const cvs = document.getElementById("c");
+const ctx = cvs.getContext("2d");
+function fit() {
+  const wrap = cvs.parentElement.getBoundingClientRect();
+  cvs.width = Math.floor(wrap.width * 2);   // 2× for HiDPI crispness
+  cvs.height = Math.floor(wrap.height * 2);
+  ctx.setTransform(2, 0, 0, 2, 0, 0);       // draw in CSS pixels
+}
+fit(); window.addEventListener("resize", fit);
+
+const STANCE = { und: 0, bear: 1, bull: 2, neutral: 3 };
+const STANCE_COLOR = ["#9945ff", "#ff3860", "#14f195", "#ffb020"];
+
+// Build ~340 personas across 4 quadrants
+const personas = [];
+const QUADS = [
+  { name: "twitter",    cx: 0.25, cy: 0.25, n: 110, role: "shill+momentum"  },
+  { name: "reddit",     cx: 0.75, cy: 0.25, n:  85, role: "contra+conserv"  },
+  { name: "polymarket", cx: 0.25, cy: 0.75, n:  70, role: "whale+arbitrage" },
+  { name: "bags.fm",    cx: 0.75, cy: 0.75, n:  90, role: "shill+momentum"  },
+];
+function rand(seed) { let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
+let idx = 0;
+QUADS.forEach((q, qi) => {
+  for (let i = 0; i < q.n; i++) {
+    const a = rand(idx * 12.7 + qi * 3.1) * Math.PI * 2;
+    const r = Math.sqrt(rand(idx * 7.3 + qi * 5.9)) * 0.16;
+    personas.push({
+      qi, x: q.cx + Math.cos(a) * r, y: q.cy + Math.sin(a) * r * 1.05,
+      stance: STANCE.und,
+      target: STANCE.und,
+      jit: { x: rand(idx * 19) * Math.PI * 2, y: rand(idx * 31) * Math.PI * 2 },
+      size: 2.4 + rand(idx * 41) * 1.6,
+      pulse: 0,
+    });
+    idx++;
+  }
+});
+const N = personas.length;
+
+document.getElementById("personaCt").textContent = N;
+// Round bar segments
+const roundBar = document.getElementById("roundBar");
+for (let i = 0; i < 8; i++) { const d = document.createElement("div"); d.className = "seg"; roundBar.appendChild(d); }
+
+// Cross-platform pulse messages (curved lines between random pairs)
+const pulses = [];
+function spawnPulse(t) {
+  const a = personas[Math.floor(rand(t * 0.13) * N)];
+  const b = personas[Math.floor(rand(t * 0.29 + 7.7) * N)];
+  if (a.qi === b.qi) return;
+  // Bias color: in earlier rounds purple/orange; later rounds red
+  const phaseBias = t < 8 ? [0, 1, 2, 3][Math.floor(rand(t) * 4)] : (rand(t) < 0.78 ? 1 : 2);
+  pulses.push({ a, b, t0: t, dur: 0.9 + rand(t * 1.7) * 0.4, color: STANCE_COLOR[phaseBias] });
+}
+
+// Stance distribution targets per "round" (0..7) — drifts toward rug-prone consensus
+const ROUND_TARGETS = [
+  { und: 0.92, bear: 0.03, bull: 0.03, neutral: 0.02 },
+  { und: 0.60, bear: 0.18, bull: 0.12, neutral: 0.10 },
+  { und: 0.38, bear: 0.30, bull: 0.18, neutral: 0.14 },
+  { und: 0.22, bear: 0.42, bull: 0.22, neutral: 0.14 },
+  { und: 0.10, bear: 0.55, bull: 0.20, neutral: 0.15 },
+  { und: 0.05, bear: 0.65, bull: 0.18, neutral: 0.12 },
+  { und: 0.02, bear: 0.72, bull: 0.16, neutral: 0.10 },
+  { und: 0.01, bear: 0.78, bull: 0.13, neutral: 0.08 },
+];
+
+// Layer fill values per round (0..7)
+const LAYERS = [
+  [10, 14, 8, 12, 6],
+  [38, 42, 30, 33, 26],
+  [55, 58, 50, 48, 42],
+  [68, 72, 62, 64, 58],
+  [78, 82, 74, 76, 70],
+  [86, 88, 82, 84, 78],
+  [92, 92, 88, 88, 84],
+  [98, 96, 94, 92, 90],
+];
+
+let lastFlips = 0;
+function applyRound(r) {
+  document.getElementById("roundN").textContent = r;
+  [...roundBar.children].forEach((el, i) => el.classList.toggle("on", i < r));
+  const T = ROUND_TARGETS[Math.min(r, 7)];
+  let flips = 0;
+  for (const p of personas) {
+    const u = rand(p.x * 1000 + p.y * 7 + r * 13.7);
+    let s;
+    if (u < T.bear) s = STANCE.bear;
+    else if (u < T.bear + T.bull) s = STANCE.bull;
+    else if (u < T.bear + T.bull + T.neutral) s = STANCE.neutral;
+    else s = STANCE.und;
+    if (s !== p.target) flips++;
+    p.target = s;
+  }
+  document.getElementById("flips").textContent = flips;
+
+  const layer = LAYERS[Math.min(r, 7)];
+  for (let i = 0; i < 5; i++) {
+    document.getElementById("L" + (i+1)).style.width = layer[i] + "%";
+    document.getElementById("L" + (i+1) + "v").textContent = layer[i];
+  }
+
+  // Stance bar percentages
+  const total = T.bear + T.bull + T.neutral + T.und;
+  const wB = (T.bear/total)*100, wG = (T.bull/total)*100, wA = (T.neutral/total)*100, wU = (T.und/total)*100;
+  const segs = [["segBear", 0, wB], ["segBull", wB, wG], ["segNeutral", wB+wG, wA], ["segUnd", wB+wG+wA, wU]];
+  for (const [id, left, width] of segs) {
+    const el = document.getElementById(id);
+    el.style.left = left + "%";
+    el.style.width = width + "%";
+  }
+  document.getElementById("pBear").textContent = Math.round(wB) + "%";
+  document.getElementById("pBull").textContent = Math.round(wG) + "%";
+  document.getElementById("pNeutral").textContent = Math.round(wA) + "%";
+  document.getElementById("pUnd").textContent = Math.round(wU) + "%";
+
+  if (r === 4) document.getElementById("compact").textContent = "round 1–4 → summary";
+  if (r === 6) document.getElementById("compact").textContent = "round 1–6 → summary";
+
+  if (r >= 5) document.getElementById("callout").classList.add("show");
+}
+
+// Schedule round transitions across the 35s window
+const ROUND_AT = [0.5, 4.0, 8.0, 12.5, 17.0, 22.0, 27.0, 31.0];
+let nextRound = 0;
+
+let last = performance.now();
+const t0 = performance.now();
+function draw(now) {
+  const t = (now - t0) / 1000;
+
+  if (nextRound < ROUND_AT.length && t >= ROUND_AT[nextRound]) {
+    applyRound(nextRound + 1);
+    nextRound++;
+  }
+
+  // Update messages/s ticker — pulse rate grows over rounds
+  const rate = Math.min(220, Math.round(20 + t * 6 + Math.sin(t * 1.7) * 12));
+  document.getElementById("msgRate").textContent = rate;
+  // Spawn 0–3 pulses per frame depending on round
+  const spawnP = 0.4 + Math.min(1.0, t / 20);
+  while (Math.random() < spawnP) { spawnPulse(t + Math.random()); if (Math.random() > 0.7) break; }
+
+  // Update personas' stance toward target gradually
+  for (const p of personas) {
+    if (p.stance !== p.target && Math.random() < 0.04) p.stance = p.target;
+  }
+
+  const W = cvs.width / 2, H = cvs.height / 2;
+  ctx.clearRect(0, 0, W, H);
+  // Subtle background glow per quadrant by dominant color
+  // (skip for perf; the CSS gradient is sufficient)
+
+  // Draw nodes
+  for (const p of personas) {
+    const jx = Math.sin(t * 0.6 + p.jit.x) * 0.0015;
+    const jy = Math.cos(t * 0.5 + p.jit.y) * 0.0015;
+    const px = (p.x + jx) * W;
+    const py = (p.y + jy) * H;
+    const col = STANCE_COLOR[p.stance];
+    // glow
+    ctx.beginPath();
+    const rad = p.size * 1.0;
+    const grd = ctx.createRadialGradient(px, py, 0, px, py, rad * 4);
+    grd.addColorStop(0, col + "cc");
+    grd.addColorStop(1, col + "00");
+    ctx.fillStyle = grd;
+    ctx.arc(px, py, rad * 4, 0, Math.PI * 2);
+    ctx.fill();
+    // core
+    ctx.beginPath();
+    ctx.fillStyle = col;
+    ctx.arc(px, py, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw pulses (curved bezier across quadrants)
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    const k = (t - p.t0) / p.dur;
+    if (k > 1) { pulses.splice(i, 1); continue; }
+    const ax = p.a.x * W, ay = p.a.y * H;
+    const bx = p.b.x * W, by = p.b.y * H;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2 - 60;
+    // bezier point
+    function bez(t1) {
+      const u = 1 - t1;
+      const x = u*u*ax + 2*u*t1*mx + t1*t1*bx;
+      const y = u*u*ay + 2*u*t1*my + t1*t1*by;
+      return [x, y];
+    }
+    // tail
+    ctx.strokeStyle = p.color + "44";
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    const start = Math.max(0, k - 0.25);
+    const [sx, sy] = bez(start);
+    ctx.moveTo(sx, sy);
+    for (let q = start; q <= k; q += 0.04) {
+      const [x, y] = bez(q); ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // head dot
+    const [hx, hy] = bez(k);
+    ctx.beginPath();
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 14; ctx.shadowColor = p.color;
+    ctx.arc(hx, hy, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body></html>
