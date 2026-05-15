@@ -73,14 +73,25 @@ The full stack runs in one command via Docker Compose. It boots Monitor, MiroSha
 git clone https://github.com/Zoidberg-eternal/monitor-the-situation-bags.git
 cd monitor-the-situation-bags
 
-# Configure Solana devnet payee
+# Configure required keys
 cp .env.example .env
-# Edit .env — set SOLANA_ADDRESS to your Solana devnet wallet public key
-# and BAGS_FM_API_KEY from https://dev.bags.fm (required — Bags now rejects
-# unauthenticated feed requests with 401)
+# Edit .env and set all THREE required values before starting:
+#   SOLANA_ADDRESS   — your Solana devnet wallet public key (x402 gateway
+#                      exits on startup if unset)
+#   BAGS_FM_API_KEY  — from https://dev.bags.fm (Bags rejects unauthenticated
+#                      feed requests with 401)
+#   LLM_API_KEY      — required for the MiroShark swarm; the simulation
+#                      backend exits with code 1 if unset and /api/v1/tokens/
+#                      simulate then returns 503
 
 docker compose up --build
 ```
+
+> **Heads-up for reviewers:** the three keys above are not committed (secrets).
+> A clean `docker compose up` with an unconfigured `.env` will start Monitor +
+> Neo4j fine, but the **MiroShark swarm (LLM_API_KEY) and x402 gateway
+> (SOLANA_ADDRESS) will not come up** until they are set. The demo video shows
+> the fully-configured stack running live end-to-end.
 
 This starts:
 
