@@ -70,8 +70,8 @@ Monitor does both:
 The full stack runs in one command via Docker Compose. It boots Monitor, MiroShark, Neo4j, and the Solana gateway.
 
 ```bash
-git clone https://github.com/Zoidberg-eternal/monitor-the-situation-stellar.git
-cd monitor-the-situation-stellar
+git clone https://github.com/Zoidberg-eternal/monitor-the-situation-bags.git
+cd monitor-the-situation-bags
 
 # Configure Solana devnet payee
 cp .env.example .env
@@ -269,7 +269,7 @@ The Stellar gateway (`stellar-gateway/` on port 3402) follows the same protocol 
 ## Project Structure
 
 ```
-monitor-the-situation-stellar/
+monitor-the-situation-bags/
 ├── monitor/                    # Python risk engine + swarm
 │   ├── bags_client.py          # Bags.fm public API v2 client
 │   ├── miroshark_client.py     # MiroShark bridge client

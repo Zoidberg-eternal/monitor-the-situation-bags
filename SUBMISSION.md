@@ -81,8 +81,8 @@ Every deep-analysis response tags the token with one or two active narratives. T
 
 ## Demo
 
-- **Repo:** https://github.com/Zoidberg-eternal/monitor-the-situation-stellar
-- **Video:** *(pending CMO production, ZERA-500)*
+- **Repo:** https://github.com/Zoidberg-eternal/monitor-the-situation-bags
+- **Video:** produced (`demo-video/monitor-miroshark-bags-FINAL.mp4`, 1080p, 2:30) — pending YouTube upload to raeli's account, ZERA-500
 - **Quartz graph preview:** (static site, generated from simulation runs)
 
 ## Why We'll Win
