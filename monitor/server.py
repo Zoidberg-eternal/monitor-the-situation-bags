@@ -608,6 +608,12 @@ async def get_deep_analysis(request: Request, mint: str):
     # Check simulation cache
     cached = _simulation_cache.get(mint)
     simulation = None
+    # sim_id is only bound inside the cache-miss `else` branch below, but the
+    # Posture-B block (ZERA-600) references it unconditionally when
+    # `simulation is None`. On a cache hit whose consensus is None (or any path
+    # that skips the trigger), that reference raised UnboundLocalError → 500.
+    # Initialize defensively so Posture B returns its structured 200, not a 500.
+    sim_id = None
     if cached and (time.time() - cached["timestamp"]) < _SIM_CACHE_TTL:
         simulation = cached["consensus"]
     else:
