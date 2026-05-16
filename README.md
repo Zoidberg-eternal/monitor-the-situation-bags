@@ -73,25 +73,20 @@ The full stack runs in one command via Docker Compose. It boots Monitor, MiroSha
 git clone https://github.com/Zoidberg-eternal/monitor-the-situation-bags.git
 cd monitor-the-situation-bags
 
-# Configure required keys
+# Configure the 3 required keys in ONE file — the bags .env (compose reads it):
 cp .env.example .env
-# Edit .env and set all THREE required values before starting:
-#   SOLANA_ADDRESS   — your Solana devnet wallet public key (x402 gateway
-#                      exits on startup if unset)
-#   BAGS_FM_API_KEY  — from https://dev.bags.fm (Bags rejects unauthenticated
-#                      feed requests with 401)
-#   LLM_API_KEY      — required for the MiroShark swarm; the simulation
-#                      backend exits with code 1 if unset and /api/v1/tokens/
-#                      simulate then returns 503
+#   BAGS_FM_API_KEY  — from https://dev.bags.fm
+#   LLM_API_KEY      — an OpenRouter key (defaults target OpenRouter + mimo)
+#   SOLANA_ADDRESS   — a REAL Solana devnet wallet pubkey you control
 
 docker compose up --build
 ```
 
-> **Heads-up for reviewers:** the three keys above are not committed (secrets).
-> A clean `docker compose up` with an unconfigured `.env` will start Monitor +
-> Neo4j fine, but the **MiroShark swarm (LLM_API_KEY) and x402 gateway
-> (SOLANA_ADDRESS) will not come up** until they are set. The demo video shows
-> the fully-configured stack running live end-to-end.
+> **Heads-up for reviewers:** these 3 keys are secrets and are not committed.
+> With them set in the single bags `.env`, all four services come up. Point 4
+> (live x402 devnet payment) needs the **real `SOLANA_ADDRESS` you supply** —
+> the gateway exits on startup if it is unset or not a valid devnet wallet, so
+> a stub will not transact. The demo video shows the configured stack live.
 
 This starts:
 
