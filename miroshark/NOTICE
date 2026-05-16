@@ -1,0 +1,23 @@
+MiroShark (vendored component)
+==============================
+
+This `./miroshark/` directory is a vendored copy of the MiroShark service.
+
+  Upstream:  https://github.com/aaronjmars/MiroShark
+  License:   GNU Affero General Public License v3.0 (AGPL-3.0)
+             — full text in ./LICENSE
+
+AGPL-3.0 explicitly permits copying and (re)distribution. This component is
+redistributed verbatim from the pinned commit recorded in ./VENDOR.md, with
+its original LICENSE and copyright notices preserved, in source form, in a
+public repository — so the AGPL §13 corresponding-source obligation is
+satisfied by construction.
+
+Licensing posture for this repository
+-------------------------------------
+The repository root is MIT-licensed (see ../LICENSE — "Zero Human Labs").
+This `./miroshark/` subtree is and remains **AGPL-3.0** and is NOT relicensed
+under MIT. `monitor` and `miroshark` run as separate containers communicating
+over HTTP (separate programs / aggregation), each retaining its own license.
+Modifications under ZERA-600 (static synthetic seed + graceful degradation)
+are released under the same AGPL-3.0 terms as the upstream they modify.

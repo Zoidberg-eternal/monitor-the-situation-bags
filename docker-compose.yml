@@ -26,7 +26,10 @@ services:
 
   miroshark:
     build:
-      context: ../miroshark
+      # Vendored, pinned MiroShark source (AGPL-3.0) lives in ./miroshark so a
+      # fresh clone + `docker compose up --build` works with zero extra steps.
+      # See ./miroshark/VENDOR.md for the pinned commit. (ZERA-600 / ZERA-499)
+      context: ./miroshark
       dockerfile: Dockerfile
     ports:
       - "5001:5001"

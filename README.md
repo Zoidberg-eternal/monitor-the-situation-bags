@@ -188,7 +188,7 @@ Four-component weighted score for Hyperliquid assets:
 - `debate.py` — orchestrates multi-round debate: each persona receives others' stances and updates beliefs round-to-round
 - `consensus.py` — aggregates final sentiment distribution, belief trajectory, notable quotes
 
-Under the hood, heavy simulation traffic is handed off to the standalone [MiroShark](https://github.com/Zoidberg-eternal/miroshark) service (container at `miroshark:5001`), which also provides a Neo4j-backed knowledge graph.
+Under the hood, heavy simulation traffic is handed off to the standalone MiroShark service (container at `miroshark:5001`), which also provides a Neo4j-backed knowledge graph. MiroShark ([upstream](https://github.com/aaronjmars/MiroShark), **AGPL-3.0**) is **vendored, pinned, in this repo** at [`./miroshark/`](./miroshark) so `docker compose up --build` works from a single fresh clone with zero extra steps — see [`./miroshark/VENDOR.md`](./miroshark/VENDOR.md) for the pinned commit and [`./miroshark/NOTICE`](./miroshark/NOTICE) for the licensing posture.
 
 ### Know Your Agent (KYA) — signed attestations
 
@@ -347,7 +347,10 @@ Reproduce: `cd stellar-gateway && npm run setup:testnet && npm run demo:e2e`
 
 ## License
 
-MIT
+MIT — except the vendored [`./miroshark/`](./miroshark) component, which is
+**AGPL-3.0** (upstream [aaronjmars/MiroShark](https://github.com/aaronjmars/MiroShark)) and
+retains its own license; it is not relicensed under MIT. See
+[`./miroshark/NOTICE`](./miroshark/NOTICE).
 
 ---
 
