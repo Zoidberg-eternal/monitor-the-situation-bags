@@ -641,12 +641,33 @@ async def get_deep_analysis(request: Request, mint: str):
                         }
                     break
 
+    # Posture B (ZERA-600): if no consensus yet, surface a clear, structured,
+    # non-fatal explanation instead of an unexplained null. Still HTTP 200.
+    simulation_note = None
+    if simulation is None and sim_id:
+        degraded = await miroshark.get_consensus(sim_id)
+        if degraded and degraded.get("degraded"):
+            simulation_note = {
+                "state": "degraded",
+                "reason": degraded.get("degraded_reason"),
+                "remediation": degraded.get("remediation"),
+            }
+        else:
+            simulation_note = {
+                "state": "pending",
+                "reason": "Simulation is still preparing/running; consensus not "
+                          "ready within the request window. Poll "
+                          "/api/v1/tokens/simulate/{id}/consensus.",
+                "simulation_id": sim_id,
+            }
+
     response = {
         "timestamp": time.time(),
         "token": scored,
         "risk_score": scored["risk_score"],
         "simulation_consensus": simulation,
         "simulation_available": simulation is not None,
+        "simulation_note": simulation_note,
         "pricing": {"amount_usdc": str(PRICE_DEEP_ANALYSIS), "network": PAYMENT_NETWORK},
     }
 

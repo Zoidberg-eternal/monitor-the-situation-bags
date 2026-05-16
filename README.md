@@ -106,10 +106,20 @@ curl http://localhost:3403/health
 # Hit a free endpoint — recent Bags.fm token launches
 curl http://localhost:8402/api/v1/tokens/launches
 
-# Trigger a deep analysis (live risk + MiroShark simulation)
-curl -X POST http://localhost:8402/api/v1/tokens/simulate \
-  -H 'Content-Type: application/json' \
-  -d '{"mint": "<mint-address>"}'
+# Grab a real mint from the live launch feed
+MINT=$(curl -s http://localhost:8402/api/v1/tokens/launches | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["tokenMint"])')
+
+# Trigger a MiroShark simulation for that token.
+# NOTE: `mint` is a QUERY PARAMETER, not a JSON body — copy-paste returns 200.
+curl -X POST "http://localhost:8402/api/v1/tokens/simulate?mint=$MINT"
+
+# Combined live risk + MiroShark consensus. Returns 200 immediately; the
+# `simulation_consensus` field populates once the sim completes (a few
+# minutes). On a fresh empty Neo4j the static demo persona graph is seeded
+# automatically on boot, so the simulation runs with no manual step. If a
+# graph is unavailable, `simulation_note` explains the degraded state
+# instead of returning a silent null.
+curl "http://localhost:8402/api/v1/tokens/deep-analysis/$MINT"
 ```
 
 ---
