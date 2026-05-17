@@ -648,22 +648,29 @@ async def get_deep_analysis(request: Request, mint: str):
                     break
 
     # Posture B (ZERA-600): if no consensus yet, surface a clear, structured,
-    # non-fatal explanation instead of an unexplained null. Still HTTP 200.
+    # non-fatal explanation with an ENUMERATED reason — never an unexplained
+    # null, never a hang, never a 5xx. consensus_envelope() always returns a
+    # dict within a bounded timeout (incl. miroshark_unreachable on OOM /
+    # restart-loop). Still HTTP 200.
     simulation_note = None
     if simulation is None and sim_id:
-        degraded = await miroshark.get_consensus(sim_id)
-        if degraded and degraded.get("degraded"):
+        env = await miroshark.consensus_envelope(sim_id)
+        if env.get("degraded"):
+            note = env.get("simulation_note") or {}
             simulation_note = {
                 "state": "degraded",
-                "reason": degraded.get("degraded_reason"),
-                "remediation": degraded.get("remediation"),
+                "reason": env.get("reason") or note.get("reason"),
+                "message": note.get("message") or env.get("degraded_reason"),
+                "remediation": env.get("remediation") or note.get("remediation"),
+                "simulation_id": sim_id,
             }
         else:
             simulation_note = {
                 "state": "pending",
-                "reason": "Simulation is still preparing/running; consensus not "
-                          "ready within the request window. Poll "
-                          "/api/v1/tokens/simulate/{id}/consensus.",
+                "reason": "pending",
+                "message": "Simulation is still preparing/running; consensus "
+                           "not ready within the request window.",
+                "remediation": "Poll /api/v1/tokens/simulate/{id}/consensus.",
                 "simulation_id": sim_id,
             }
 
@@ -753,15 +760,19 @@ async def trigger_miroshark_simulation(
 
 @app.get("/api/v1/tokens/simulate/{simulation_id}/consensus")
 async def get_miroshark_consensus(request: Request, simulation_id: str):
-    """Get MiroShark consensus results for a simulation."""
-    miroshark = _get_miroshark_client()
-    consensus = await miroshark.get_consensus(simulation_id)
-    if consensus is None:
-        raise HTTPException(503, detail="MiroShark unavailable or simulation not found")
+    """Get MiroShark consensus results for a simulation.
 
+    Posture-B (ZERA-600): a consensus-dependent judge call must NEVER 5xx or
+    hang. consensus_envelope() always returns a structured dict within a
+    bounded timeout — healthy consensus, or a degraded envelope with an
+    enumerated reason (incl. miroshark_unreachable on OOM/restart-loop and
+    simulation_incomplete_resource on an OOM-aborted in-flight sim).
+    """
+    miroshark = _get_miroshark_client()
+    envelope = await miroshark.consensus_envelope(simulation_id)
     return {
         "timestamp": time.time(),
-        **consensus,
+        **envelope,
         "pricing": {"amount_usdc": str(PRICE_MIROSHARK_SIM), "network": PAYMENT_NETWORK},
     }
 
@@ -772,7 +783,13 @@ async def get_miroshark_status(request: Request, simulation_id: str):
     miroshark = _get_miroshark_client()
     status = await miroshark.get_status(simulation_id)
     if status is None:
-        raise HTTPException(503, detail="MiroShark unavailable or simulation not found")
+        # Posture-B: structured 200, never 5xx (miroshark down/restart-loop).
+        from monitor.miroshark_client import unreachable_envelope
+        return {
+            "timestamp": time.time(),
+            "simulation_id": simulation_id,
+            **unreachable_envelope(simulation_id),
+        }
 
     return {
         "timestamp": time.time(),

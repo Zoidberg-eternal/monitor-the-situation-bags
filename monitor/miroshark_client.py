@@ -21,6 +21,55 @@ DEFAULT_URL = "http://localhost:5001"
 MAX_RETRIES = 3
 BACKOFF_BASE = 1.0
 REQUEST_TIMEOUT = 30.0
+# Posture-B (ZERA-600): consensus/status reads must yield a structured answer
+# within a few seconds even if MiroShark is OOM-killed / restart-looping —
+# "never a hang" is only enforceable with an explicit bound.
+BOUNDED_TIMEOUT = 6.0
+
+# Enumerated degradation reasons — must match MiroShark's
+# app/services/degradation.py so a judge sees one stable taxonomy.
+REASON_NO_LLM_KEY = "no_llm_key"
+REASON_GRAPH_UNSEEDED = "graph_unseeded"
+REASON_MIROSHARK_UNREACHABLE = "miroshark_unreachable"
+REASON_SIM_INCOMPLETE_RESOURCE = "simulation_incomplete_resource"
+
+_UNREACHABLE_REMEDIATION = (
+    "MiroShark is not reachable (down or restart-looping — commonly an "
+    "out-of-memory restart loop on under-provisioned Docker). Increase "
+    "Docker Desktop memory allocation to >=12 GB and re-run the documented "
+    "command."
+)
+
+
+def unreachable_envelope(simulation_id: str | None = None) -> dict:
+    """Synthetic Posture-B envelope when MiroShark itself cannot be reached.
+
+    Never None — callers must always get a structured, non-fatal answer.
+    """
+    return {
+        "simulation_id": simulation_id,
+        "status": "unreachable",
+        "degraded": True,
+        "reason": REASON_MIROSHARK_UNREACHABLE,
+        "degraded_reason": "MiroShark service did not respond within the bound.",
+        "simulation_note": {
+            "state": "degraded",
+            "reason": REASON_MIROSHARK_UNREACHABLE,
+            "message": "MiroShark service did not respond within the bound.",
+            "remediation": _UNREACHABLE_REMEDIATION,
+        },
+        "remediation": _UNREACHABLE_REMEDIATION,
+        "sentiment_distribution": {},
+        "top_arguments": {},
+        "belief_trajectory": [],
+        "predicted_direction": "unavailable",
+        "confidence": 0,
+        "agent_attestations": [],
+        "sim_root_did": None,
+        "manifest": None,
+        "manifest_signature": None,
+        "simulation_consensus": None,
+    }
 
 
 class MiroSharkClient:
@@ -40,14 +89,24 @@ class MiroSharkClient:
         self._timeout = timeout
         self._available: bool | None = None
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> dict | None:
-        """Make an HTTP request with retry logic and graceful fallback."""
+    async def _request(self, method: str, path: str, bounded: bool = False,
+                       **kwargs: Any) -> dict | None:
+        """HTTP request with retry + graceful fallback.
+
+        ``bounded=True``: a single attempt with a short timeout and no
+        backoff sleeps — used for consensus/status reads so an OOM-killed or
+        restart-looping MiroShark returns control within a few seconds
+        instead of hanging through the full retry/backoff budget.
+        """
         url = f"{self._base_url}{path}"
         import asyncio
 
-        for attempt in range(MAX_RETRIES):
+        attempts = 1 if bounded else MAX_RETRIES
+        timeout = BOUNDED_TIMEOUT if bounded else self._timeout
+
+        for attempt in range(attempts):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=timeout) as client:
                     resp = await client.request(method, url, **kwargs)
                     resp.raise_for_status()
                     self._available = True
@@ -61,11 +120,14 @@ class MiroSharkClient:
                 logger.error("MiroShark %s %s returned %s: %s", method, path, e.response.status_code, e.response.text[:200])
                 return None
             except (httpx.TimeoutException, httpx.RequestError) as e:
+                if bounded:
+                    logger.warning("MiroShark bounded request timed out/failed: %s %s (%s)", method, path, e)
+                    return None
                 wait = BACKOFF_BASE * (2 ** attempt)
                 logger.warning("MiroShark request failed (attempt %d/%d): %s — retrying in %.1fs", attempt + 1, MAX_RETRIES, e, wait)
                 await asyncio.sleep(wait)
 
-        logger.error("MiroShark request failed after %d attempts: %s %s", MAX_RETRIES, method, path)
+        logger.error("MiroShark request failed after %d attempts: %s %s", attempts, method, path)
         return None
 
     @property
@@ -115,7 +177,8 @@ class MiroSharkClient:
             Consensus dict with sentiment_distribution, predicted_direction,
             confidence, belief_trajectory, etc. None if unavailable.
         """
-        result = await self._request("GET", f"/api/simulation/{simulation_id}/consensus")
+        result = await self._request(
+            "GET", f"/api/simulation/{simulation_id}/consensus", bounded=True)
         if result and result.get("success"):
             return {
                 "simulation_id": result.get("simulation_id"),
@@ -127,6 +190,13 @@ class MiroSharkClient:
                 "belief_trajectory": result.get("belief_trajectory", []),
                 "predicted_direction": result.get("predicted_direction", "unknown"),
                 "confidence": result.get("confidence", 0),
+                # Posture-B passthrough (ZERA-600): keep the enumerated reason
+                # + remediation so monitor never collapses it to a bare null.
+                "degraded": result.get("degraded", False),
+                "reason": result.get("reason"),
+                "degraded_reason": result.get("degraded_reason"),
+                "simulation_note": result.get("simulation_note"),
+                "remediation": result.get("remediation"),
                 # KYA (Know Your Agent) attestations — pass through as-is so
                 # downstream consumers can verify each agent's contribution
                 # and the sim-root manifest signature against MiroShark's
@@ -137,3 +207,16 @@ class MiroSharkClient:
                 "manifest_signature": result.get("manifest_signature"),
             }
         return None
+
+    async def consensus_envelope(self, simulation_id: str) -> dict:
+        """Posture-B: ALWAYS returns a structured dict, never None.
+
+        Healthy/degraded consensus from MiroShark when reachable; a
+        synthetic ``miroshark_unreachable`` envelope (within the bounded
+        timeout) when it is down or restart-looping. Guarantees the caller
+        can always return HTTP 200 with an enumerated reason.
+        """
+        result = await self.get_consensus(simulation_id)
+        if result is None:
+            return unreachable_envelope(simulation_id)
+        return result

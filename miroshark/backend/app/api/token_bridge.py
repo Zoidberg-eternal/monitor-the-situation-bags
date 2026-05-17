@@ -15,6 +15,7 @@ from flask import Blueprint, jsonify, request
 from ..config import Config
 from ..seed import SEED_GRAPH_ID
 from ..seed.seed_loader import seed_graph_has_entities
+from ..services import degradation
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import SimulationRunner
 from ..services.agent_credentials import (
@@ -141,22 +142,22 @@ def _run_simulation_pipeline(simulation_id: str, token_data: dict, document_text
             logger.info(f"[{simulation_id}] Simulation started for token {ticker}")
         else:
             # --- Posture B (ZERA-600): never leave a silent/opaque failure.
-            # Record a structured, actionable reason so /consensus can return
-            # a clear degraded payload instead of an unexplained null.
-            reason = (state.error if state and state.error else "preparation did not reach READY")
+            # Classify the failure into an enumerated reason and persist it
+            # (sentinel-encoded in state.error) so /consensus can return a
+            # structured, specifically-actionable degraded payload.
+            raw = (state.error if state and state.error else
+                   "preparation did not reach READY")
+            reason = degradation.classify_prep_failure(raw)
             if state:
                 if state.status != SimulationStatus.FAILED:
                     state.status = SimulationStatus.FAILED
-                if not state.error:
-                    state.error = (
-                        "Knowledge graph not populated. The static demo seed did "
-                        "not load — recreate the stack with "
-                        "`docker compose down -v && docker compose up --build` "
-                        "so the empty-Neo4j seed step runs."
-                    )
+                # Re-encode with the machine reason unless one is already there.
+                if degradation.decode_reason(state.error) is None:
+                    msg = state.error or degradation.REMEDIATION[reason]
+                    state.error = degradation.encode_reason(reason, msg)
                 manager._save_simulation_state(state)
             logger.warning(
-                "[%s] Preparation did not reach READY state: %s (%s)",
+                "[%s] Preparation did not reach READY: %s (reason=%s)",
                 simulation_id, state.status if state else 'None', reason,
             )
 
@@ -261,45 +262,38 @@ def get_consensus(simulation_id: str):
             return jsonify({"success": False, "error": "Simulation not found"}), 404
 
         # --- Posture B (ZERA-600): graceful degradation -------------------
-        # A prep failure (e.g. empty knowledge graph on the one-command path)
-        # must surface as a clear, structured, non-fatal payload — HTTP 200,
-        # success=true, consensus explicitly degraded — never a silent null
-        # or an unexplained 5xx for the caller to guess at.
+        # ANY non-consensus state — prep failure (empty graph / no LLM key),
+        # OR an OOM-killed sim aborted mid-debate — must surface as a clear,
+        # structured, non-fatal payload (HTTP 200, success=true, enumerated
+        # reason, specifically-actionable remediation). Never a silent null,
+        # never a hang, never an unexplained 5xx.
         status_str = state.status.value if hasattr(state.status, 'value') else str(state.status)
-        if state.status == SimulationStatus.FAILED:
-            note = state.error or (
-                "Simulation preparation failed before any agent ran. The "
-                "knowledge graph was not populated."
-            )
-            logger.warning(
-                "[%s] consensus requested on FAILED sim — returning degraded payload",
-                simulation_id,
-            )
-            return jsonify({
-                "success": True,
-                "simulation_id": simulation_id,
-                "status": status_str,
-                "degraded": True,
-                "degraded_reason": note,
-                "remediation": (
-                    "Recreate the stack with "
-                    "`docker compose down -v && docker compose up --build` so "
-                    "the empty-Neo4j static seed step runs, then retry."
-                ),
-                "rounds_completed": 0,
-                "total_posts_analyzed": 0,
-                "sentiment_distribution": {"bullish": 0, "bearish": 0, "neutral": 0},
-                "top_arguments": {"bullish": [], "bearish": []},
-                "belief_trajectory": [],
-                "predicted_direction": "unavailable",
-                "confidence": 0,
-                "agent_attestations": [],
-                "sim_root_did": None,
-                "manifest": None,
-                "manifest_signature": None,
-            }), 200
 
         actions = SimulationRunner.get_actions(simulation_id=simulation_id, limit=10000)
+
+        # Is the sim's runner process still alive? (dead runner + no actions +
+        # not completed == OOM-killed mid-run, the most common judge case.)
+        try:
+            proc = SimulationRunner._processes.get(simulation_id)
+            runner_alive = proc is not None and proc.poll() is None
+        except Exception:
+            runner_alive = False
+
+        degraded, reason, message, remediation = degradation.classify_degradation(
+            status=status_str,
+            error_text=state.error,
+            num_actions=len(actions),
+            runner_alive=runner_alive,
+        )
+        if degraded:
+            logger.warning(
+                "[%s] consensus degraded (reason=%s, status=%s, actions=%d, "
+                "runner_alive=%s) — structured 200",
+                simulation_id, reason, status_str, len(actions), runner_alive,
+            )
+            return jsonify(degradation.degraded_payload(
+                simulation_id, status_str, reason, message, remediation,
+            )), 200
 
         # Load (or rehydrate from disk) the simulation's keyring so we can build
         # signed attestations + a root-signed manifest below.
