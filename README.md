@@ -73,10 +73,13 @@ The full stack runs in one command via Docker Compose. It boots Monitor, MiroSha
 git clone https://github.com/Zoidberg-eternal/monitor-the-situation-bags.git
 cd monitor-the-situation-bags
 
-# Configure the 3 required keys in ONE file — the bags .env (compose reads it):
+# Configure the 3 judge-supplied keys in ONE file — the bags .env (compose reads it):
 cp .env.example .env
 #   BAGS_FM_API_KEY  — from https://dev.bags.fm
-#   LLM_API_KEY      — an OpenRouter key (defaults target OpenRouter + mimo)
+#   LLM_API_KEY      — YOU supply this (OpenAI-compatible). Defaults target
+#                      OpenRouter + mimo; override LLM_BASE_URL / LLM_MODEL_NAME
+#                      for OpenAI/Groq/etc. Same class as SOLANA_ADDRESS: it is
+#                      your credential, not shipped in this repo.
 #   SOLANA_ADDRESS   — a REAL Solana devnet wallet pubkey you control
 
 docker compose up --build
@@ -87,6 +90,21 @@ docker compose up --build
 > (live x402 devnet payment) needs the **real `SOLANA_ADDRESS` you supply** —
 > the gateway exits on startup if it is unset or not a valid devnet wallet, so
 > a stub will not transact. The demo video shows the configured stack live.
+>
+> **`LLM_API_KEY` behavior contract (read this before asking "why is
+> `simulation_consensus` null?"):** the MiroShark swarm needs *your*
+> OpenAI-compatible key — exactly like `SOLANA_ADDRESS`, it is judge-supplied
+> and never shipped here.
+> - **Valid key →** the simulation runs and `/api/v1/tokens/deep-analysis/{mint}`
+>   returns a **non-null `simulation_consensus`** (sentiment distribution,
+>   belief trajectory, signed attestations).
+> - **Absent / invalid / expired key →** this is **expected, not a defect**.
+>   The stack degrades gracefully (Posture B): endpoints return a structured
+>   HTTP **200** with `simulation_consensus: null` and an explanatory
+>   `simulation_note` — **never a silent null, never a 5xx/crash**. An
+>   expired or wrong key reads identically to "no key supplied": graceful.
+> The knowledge graph itself is **always** seeded on a fresh, empty Neo4j
+> (synthetic personas, no extra step), so an empty graph is never the cause.
 
 This starts:
 
