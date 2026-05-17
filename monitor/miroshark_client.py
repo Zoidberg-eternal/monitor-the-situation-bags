@@ -32,6 +32,12 @@ REASON_NO_LLM_KEY = "no_llm_key"
 REASON_GRAPH_UNSEEDED = "graph_unseeded"
 REASON_MIROSHARK_UNREACHABLE = "miroshark_unreachable"
 REASON_SIM_INCOMPLETE_RESOURCE = "simulation_incomplete_resource"
+# Token-feed axis (not the consensus taxonomy): Bags.fm removed anonymous
+# access, so the launch feed needs a judge-supplied BAGS_FM_API_KEY — the
+# same judge-supplied-credential class as LLM_API_KEY / SOLANA_ADDRESS. When
+# absent the upstream returns 401; /deep-analysis must still answer with a
+# structured 200, never a 5xx (ZERA-600 "never a hang/5xx/silent null").
+REASON_TOKEN_FEED_UNAVAILABLE = "token_feed_unavailable"
 
 _UNREACHABLE_REMEDIATION = (
     "MiroShark is not reachable (down or restart-looping — commonly an "
@@ -39,6 +45,30 @@ _UNREACHABLE_REMEDIATION = (
     "Docker Desktop memory allocation to >=12 GB and re-run the documented "
     "command."
 )
+
+_TOKEN_FEED_REMEDIATION = (
+    "The Bags.fm token launch feed is unavailable (Bags removed anonymous "
+    "access — upstream returned 401/unauthorized). Set a valid "
+    "BAGS_FM_API_KEY in the bags .env (judge-supplied, same class as "
+    "LLM_API_KEY / SOLANA_ADDRESS) and re-run the documented command."
+)
+
+
+def token_feed_unavailable_note(detail: str = "") -> dict:
+    """Structured Posture-B note when the Bags launch feed cannot be fetched.
+
+    Lets /deep-analysis return HTTP 200 with an enumerated reason instead of
+    propagating the upstream 401 as an unhandled 500.
+    """
+    msg = "Bags.fm token launch feed unavailable (missing/invalid BAGS_FM_API_KEY)."
+    if detail:
+        msg = f"{msg} ({detail})"
+    return {
+        "state": "degraded",
+        "reason": REASON_TOKEN_FEED_UNAVAILABLE,
+        "message": msg,
+        "remediation": _TOKEN_FEED_REMEDIATION,
+    }
 
 
 def unreachable_envelope(simulation_id: str | None = None) -> dict:
