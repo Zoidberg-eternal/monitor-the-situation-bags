@@ -63,6 +63,29 @@ _seen_mints: set[str] = set()
 _AUTO_SIM_ENABLED = os.environ.get("AUTO_SIMULATE", "1").lower() in ("1", "true", "yes")
 _AUTO_SIM_INTERVAL = int(os.environ.get("AUTO_SIMULATE_INTERVAL", "120"))
 
+
+def _is_surfaceable_consensus(c: dict | None) -> bool:
+    """True when MiroShark has produced a real, non-degraded consensus.
+
+    ZERA-600 root-cause fix: the showcase was gated on the simulation status
+    string being literally ``"completed"``, but MiroShark surfaces a fully
+    aggregated, ed25519-signed consensus while status is still ``"ready"`` /
+    ``"running"`` (the debate produced actions and a signed manifest but the
+    runner state never flips to "completed"). That gate is why the headline
+    `simulation_consensus` rendered null even when a real consensus existed.
+    Surface on the *presence of a real aggregation*, not the status string.
+    """
+    if not c or c.get("degraded"):
+        return False
+    direction = (c.get("predicted_direction") or "").lower()
+    if direction in ("", "unavailable", "unknown"):
+        return False
+    sent = c.get("sentiment_distribution") or {}
+    has_signal = c.get("manifest") is not None or (
+        isinstance(sent, dict) and sum(v for v in sent.values() if isinstance(v, (int, float))) > 0
+    )
+    return has_signal
+
 # --- Payment network ---
 PAYMENT_NETWORK = os.environ.get("PAYMENT_NETWORK", "stellar")
 
@@ -140,13 +163,15 @@ async def _auto_simulate_loop():
                     sim_id = entry.get("simulation_id")
                     if not sim_id:
                         continue
-                    status = await _miroshark_client.get_status(sim_id)
-                    if status and status.get("status") == "completed":
-                        consensus = await _miroshark_client.get_consensus(sim_id)
-                        if consensus:
-                            entry["consensus"] = consensus
-                            entry["timestamp"] = time.time()
-                            logger.info("Cached MiroShark consensus for %s", mint[:8])
+                    # ZERA-600 root-cause fix: surface on presence of a real
+                    # aggregation, not status=="completed" (sim stalls at
+                    # "ready"/"running" with a signed consensus → cache was
+                    # never warmed → showcase null on the documented path).
+                    consensus = await _miroshark_client.get_consensus(sim_id)
+                    if _is_surfaceable_consensus(consensus):
+                        entry["consensus"] = consensus
+                        entry["timestamp"] = time.time()
+                        logger.info("Cached MiroShark consensus for %s", mint[:8])
         except Exception:
             logger.exception("Auto-simulate loop error")
         await asyncio.sleep(_AUTO_SIM_INTERVAL)
@@ -673,18 +698,21 @@ async def get_deep_analysis(request: Request, mint: str):
         if sim_id:
             # Poll briefly for results (simulation may complete quickly for cached configs)
             import asyncio
+            # ZERA-600 root-cause fix: poll get_consensus and surface as soon
+            # as a real, non-degraded aggregation exists — do NOT gate on
+            # status=="completed" (MiroShark serves a signed consensus while
+            # status is still "ready"/"running"; the old gate is why the
+            # headline showcase rendered null even when consensus existed).
             for _ in range(3):
                 await asyncio.sleep(2)
-                status = await miroshark.get_status(sim_id)
-                if status and status.get("status") == "completed":
-                    consensus = await miroshark.get_consensus(sim_id)
-                    if consensus:
-                        simulation = consensus
-                        _simulation_cache[mint] = {
-                            "simulation_id": sim_id,
-                            "consensus": consensus,
-                            "timestamp": time.time(),
-                        }
+                consensus = await miroshark.get_consensus(sim_id)
+                if _is_surfaceable_consensus(consensus):
+                    simulation = consensus
+                    _simulation_cache[mint] = {
+                        "simulation_id": sim_id,
+                        "consensus": consensus,
+                        "timestamp": time.time(),
+                    }
                     break
 
     # Posture B (ZERA-600): if no consensus yet, surface a clear, structured,
