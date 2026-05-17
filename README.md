@@ -131,7 +131,7 @@ curl http://localhost:3403/health
 curl http://localhost:8402/api/v1/tokens/launches
 
 # Grab a real mint from the live launch feed
-MINT=$(curl -s http://localhost:8402/api/v1/tokens/launches | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["tokenMint"])')
+MINT=$(curl -s http://localhost:8402/api/v1/tokens/launches | python3 -c 'import sys,json; print(json.load(sys.stdin)["tokens"][0]["token_mint"])')
 
 # Trigger a MiroShark simulation for that token.
 # NOTE: `mint` is a QUERY PARAMETER, not a JSON body — copy-paste returns 200.
