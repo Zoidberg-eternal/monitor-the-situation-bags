@@ -105,6 +105,12 @@ docker compose up --build
 >   expired or wrong key reads identically to "no key supplied": graceful.
 > The knowledge graph itself is **always** seeded on a fresh, empty Neo4j
 > (synthetic personas, no extra step), so an empty graph is never the cause.
+>
+> **Resource note:** the MiroShark multi-agent swarm is memory-intensive
+> during the debate rounds. Allow Docker **≥ 12 GB RAM**; on an ~8 GB host the
+> `miroshark` container is OOM-killed mid-simulation (exit 137) and consensus
+> stays null even with a valid key. Persona generation and the seeded graph
+> work at 8 GB — only the full simulation rounds need the headroom.
 
 This starts:
 
