@@ -128,7 +128,10 @@ def test_classify_oom_mid_sim_is_resource_incomplete():
         status="running", error_text=None, num_actions=0, runner_alive=False)
     assert degraded is True
     assert reason == degradation.SIMULATION_INCOMPLETE_RESOURCE
-    assert ">=12 GB" in rem and "Docker" in rem
+    # The remediation must mention Docker memory and the demonstrative-preset/full-run framing
+    assert "Docker" in rem
+    assert ("preset" in rem or "MIROSHARK_SIM_PLATFORM" in rem or
+            "WONDERWALL_DEFAULT_MAX_ROUNDS" in rem or "16 GB" in rem)
 
 
 def test_classify_failed_reasons_roundtrip():

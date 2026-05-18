@@ -11,7 +11,8 @@ import threading
 import subprocess
 import signal
 import atexit
-from typing import Dict, Any, List, Optional, TextIO
+import sqlite3
+from typing import Dict, Any, List, Optional, TextIO, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -1131,10 +1132,174 @@ class SimulationRunner:
             except Exception as e:
                 logger.error(f"Failed to stop graph memory updater: {e}")
             cls._graph_memory_enabled.pop(simulation_id, None)
-        
+
         logger.info(f"Simulation stopped: {simulation_id}")
         return state
-    
+
+    @classmethod
+    def _convert_reddit_db_to_actions(
+        cls,
+        db_path: str,
+        agent_id_filter: Optional[int] = None,
+        round_num_filter: Optional[int] = None
+    ) -> List[AgentAction]:
+        """
+        Convert reddit_simulation.db to a list of AgentAction objects using the trace table.
+
+        Reads actions from the canonical trace table (schema: user_id INTEGER, created_at DATETIME,
+        action TEXT, info TEXT), derives round_num from distinct created_at values (the simulated
+        clock advances by minutes_per_round each round), maps user_id -> agent_id via the user table,
+        and preserves action content verbatim.
+
+        This mirrors the proven parallel converter's fetch_new_actions_from_db() pattern to ensure
+        faithful round derivation and no fabricated structures.
+
+        Args:
+            db_path: Path to reddit_simulation.db
+            agent_id_filter: Optional filter by agent_id
+            round_num_filter: Optional filter by round_num
+
+        Returns:
+            List of AgentAction objects (best-effort; returns [] on any failure with warning)
+        """
+        # Action type mapping — same as run_parallel_simulation.py::ACTION_TYPE_MAP
+        # Lines 696-712 of run_parallel_simulation.py
+        ACTION_TYPE_MAP = {
+            'create_post': 'CREATE_POST',
+            'like_post': 'LIKE_POST',
+            'dislike_post': 'DISLIKE_POST',
+            'repost': 'REPOST',
+            'quote_post': 'QUOTE_POST',
+            'follow': 'FOLLOW',
+            'mute': 'MUTE',
+            'create_comment': 'CREATE_COMMENT',
+            'like_comment': 'LIKE_COMMENT',
+            'dislike_comment': 'DISLIKE_COMMENT',
+            'search_posts': 'SEARCH_POSTS',
+            'search_user': 'SEARCH_USER',
+            'trend': 'TREND',
+            'do_nothing': 'DO_NOTHING',
+            'interview': 'INTERVIEW',
+        }
+
+        # Actions to skip (low analytical value for consensus)
+        FILTERED_ACTIONS = {'refresh', 'sign_up'}
+
+        # Content-bearing actions (those that carry meaningful post/comment-like content)
+        CONTENT_ACTIONS = {
+            'CREATE_POST', 'REPOST', 'CREATE_COMMENT', 'QUOTE_POST',
+            'COMMENT'  # legacy form
+        }
+
+        actions = []
+
+        if not os.path.exists(db_path):
+            return actions
+
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Step 1: Fetch agent_id -> agent_name mapping from user table
+            cursor.execute("""
+                SELECT user_id, agent_id, user_name FROM user
+            """)
+            user_map = {}
+            for user_id, agent_id, user_name in cursor.fetchall():
+                user_map[user_id] = {
+                    'agent_id': agent_id,
+                    'agent_name': user_name or f"Agent_{agent_id}"
+                }
+
+            # Step 2: Fetch all trace records ordered by rowid
+            cursor.execute("""
+                SELECT user_id, created_at, action, info
+                FROM trace
+                ORDER BY rowid ASC
+            """)
+            trace_records = cursor.fetchall()
+
+            conn.close()
+
+            # Step 3: Derive rounds from distinct created_at values (simulated clock)
+            # Collect distinct timestamps and map each to a sequential round number
+            distinct_times = []
+            seen_times = set()
+            for user_id, created_at, action, info in trace_records:
+                if created_at is not None and created_at not in seen_times:
+                    distinct_times.append(created_at)
+                    seen_times.add(created_at)
+
+            # Sort distinct times ascending to get real round ordering
+            distinct_times.sort()
+
+            # Map each distinct created_at to a round_num (1, 2, 3, ...)
+            created_at_to_round = {}
+            for idx, ct in enumerate(distinct_times):
+                created_at_to_round[ct] = idx + 1
+
+            # Step 4: Process trace records and convert to AgentAction objects
+            for user_id, created_at, action, info_json in trace_records:
+                # Skip filtered actions
+                if action in FILTERED_ACTIONS:
+                    continue
+
+                # Get agent_id and agent_name from user_map
+                if user_id not in user_map:
+                    continue
+
+                agent_id = user_map[user_id]['agent_id']
+                agent_name = user_map[user_id]['agent_name']
+
+                # Apply agent_id filter if specified
+                if agent_id_filter is not None and agent_id != agent_id_filter:
+                    continue
+
+                # Derive round_num from created_at (simulated clock)
+                # If created_at is null/missing, assign to round 1 (single round case)
+                if created_at is not None and created_at in created_at_to_round:
+                    round_num = created_at_to_round[created_at]
+                else:
+                    round_num = 1
+
+                # Apply round_num filter if specified
+                if round_num_filter is not None and round_num != round_num_filter:
+                    continue
+
+                # Parse action arguments from info JSON
+                try:
+                    action_args = json.loads(info_json) if info_json else {}
+                except json.JSONDecodeError:
+                    action_args = {}
+
+                # Map action name to standard type
+                action_type = ACTION_TYPE_MAP.get(action, action.upper())
+
+                # Extract content for result field (preserve verbatim)
+                content = action_args.get('content', '')
+                if not content and 'post_content' in action_args:
+                    content = action_args['post_content']
+                if not content and 'comment_content' in action_args:
+                    content = action_args['comment_content']
+
+                # Create AgentAction
+                actions.append(AgentAction(
+                    round_num=round_num,
+                    timestamp=created_at or datetime.now().isoformat(),
+                    platform='reddit',
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    action_type=action_type,
+                    action_args=action_args,
+                    result=content,
+                    success=True,
+                ))
+
+        except Exception as e:
+            logger.warning(f"Failed to read reddit_simulation.db via trace table: {e}")
+
+        return actions
+
     @classmethod
     def _read_actions_from_file(
         cls,
@@ -1241,13 +1406,22 @@ class SimulationRunner:
         # Read Reddit action file (auto-set platform to reddit based on file path)
         reddit_actions_log = os.path.join(sim_dir, "reddit", "actions.jsonl")
         if not platform or platform == "reddit":
-            actions.extend(cls._read_actions_from_file(
+            reddit_actions = cls._read_actions_from_file(
                 reddit_actions_log,
                 default_platform="reddit",  # Auto-fill platform field
                 platform_filter=platform,
                 agent_id=agent_id,
                 round_num=round_num
-            ))
+            )
+            # If no actions.jsonl, try reading from the database
+            if not reddit_actions:
+                reddit_db = os.path.join(sim_dir, "reddit_simulation.db")
+                reddit_actions = cls._convert_reddit_db_to_actions(
+                    reddit_db,
+                    agent_id_filter=agent_id,
+                    round_num_filter=round_num
+                )
+            actions.extend(reddit_actions)
 
         # Read Polymarket action file
         polymarket_actions_log = os.path.join(sim_dir, "polymarket", "actions.jsonl")
