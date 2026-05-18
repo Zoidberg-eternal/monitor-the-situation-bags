@@ -1200,6 +1200,28 @@ class SimulationRunner:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
 
+            # ZERA-600: the reddit platform `user` table leaves user_name NULL,
+            # so attestations would read "Agent_1" instead of the real persona.
+            # reddit_profiles.json (sibling of the db) is the faithful
+            # user_id -> persona-name mapping the sim was built from. Use it so
+            # the multi-agent showcase shows real personas; fall back to the
+            # db user_name, then Agent_<id>.
+            profile_names = {}
+            try:
+                _prof = os.path.join(os.path.dirname(db_path), "reddit_profiles.json")
+                if os.path.exists(_prof):
+                    with open(_prof, "r", encoding="utf-8") as _pf:
+                        _pdata = json.load(_pf)
+                    _plist = _pdata if isinstance(_pdata, list) else (
+                        _pdata.get("users") or _pdata.get("profiles") or [])
+                    for _p in _plist:
+                        if isinstance(_p, dict) and _p.get("user_id") is not None:
+                            _nm = _p.get("name") or _p.get("username")
+                            if _nm:
+                                profile_names[_p["user_id"]] = _nm
+            except Exception as _e:
+                logger.warning(f"reddit_profiles.json name enrich skipped: {_e}")
+
             # Step 1: Fetch agent_id -> agent_name mapping from user table
             cursor.execute("""
                 SELECT user_id, agent_id, user_name FROM user
@@ -1208,7 +1230,9 @@ class SimulationRunner:
             for user_id, agent_id, user_name in cursor.fetchall():
                 user_map[user_id] = {
                     'agent_id': agent_id,
-                    'agent_name': user_name or f"Agent_{agent_id}"
+                    'agent_name': (profile_names.get(user_id)
+                                   or user_name
+                                   or f"Agent_{agent_id}")
                 }
 
             # Step 2: Fetch all trace records ordered by rowid

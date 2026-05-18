@@ -168,6 +168,41 @@ def test_running_with_live_runner_is_pending_not_degraded():
     assert d is False  # genuinely in-flight, not an abort
 
 
+def test_comments_count_as_multi_agent_participation(monkeypatch):
+    """ZERA-600 floor regression: CREATE_COMMENT/QUOTE_POST are debate
+    participation and MUST be counted. Omitting them collapsed a real
+    4-persona debate (posts by 1 agent + comments by all 4) to a single
+    attributed agent, failing the >=3-distinct-signed-agents floor."""
+    app = Flask(__name__)
+    app.register_blueprint(token_bridge.token_bridge_bp, url_prefix="/api/simulation")
+
+    def _mixed_debate():
+        mk = lambda rn, c, aid, nm, at: type("A", (), {
+            "to_dict": lambda self, _d={
+                "round_num": rn, "action_type": at, "result": c,
+                "action_args": {"content": c}, "agent_id": aid,
+                "agent_name": nm, "timestamp": "2026-05-18T00:00:00Z"}: _d})()
+        return [
+            mk(1, "buy, bullish moon", 1, "Momentum Mia", "CREATE_POST"),
+            mk(1, "rug, bearish, avoid", 2, "Skeptic Sasha", "CREATE_COMMENT"),
+            mk(2, "undervalued, long", 3, "Quant Quinn", "CREATE_COMMENT"),
+            mk(2, "overvalued dump", 4, "Contrarian Cora", "QUOTE_POST"),
+        ]
+    monkeypatch.setattr(token_bridge, "SimulationManager", _FakeManager)
+    monkeypatch.setattr(token_bridge.SimulationRunner, "get_actions",
+                        classmethod(lambda cls, simulation_id, limit=10000: _mixed_debate()))
+    monkeypatch.setattr(token_bridge.SimulationRunner, "_processes", {}, raising=False)
+    monkeypatch.setattr(token_bridge.SimulationKeyring, "lookup",
+                        staticmethod(lambda sim_id: None))
+    _FakeManager._state = _FakeState(SimulationStatus.COMPLETED)
+    b = app.test_client().get("/api/simulation/s/consensus").get_json()
+    # All 4 distinct agents' content (post + comments + quote) must count.
+    assert b["total_posts_analyzed"] == 4, b
+    assert b["sentiment_distribution"]["bullish"] > 0 and b["sentiment_distribution"]["bearish"] > 0
+    # >=3 distinct sentiment classes / divergence preserved, not collapsed.
+    assert b["confidence"] != 1.0
+
+
 def test_degraded_endpoint_returns_structured_200(client):
     # FAILED sim with an encoded no_llm_key reason -> structured 200, never 5xx.
     _FakeManager._state = _FakeState(

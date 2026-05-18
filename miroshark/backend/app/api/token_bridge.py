@@ -318,7 +318,14 @@ def get_consensus(simulation_id: str):
             if r > rounds_completed:
                 rounds_completed = r
 
-            if ad.get("action_type") in ("CREATE_POST", "REPOST", "COMMENT"):
+            # ZERA-600: count the full content-bearing action vocabulary the
+            # reddit adapter emits (ACTION_TYPE_MAP). Comments ARE debate
+            # participation — omitting CREATE_COMMENT collapsed a genuine
+            # 4-persona divergent debate (4 posts + 6 comments across all 4
+            # agents) down to a single poster, failing the multi-agent floor.
+            if ad.get("action_type") in (
+                "CREATE_POST", "REPOST", "COMMENT", "CREATE_COMMENT", "QUOTE_POST",
+            ):
                 content = ""
                 if isinstance(ad.get("result"), str):
                     content = ad["result"]
