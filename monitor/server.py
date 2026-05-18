@@ -58,7 +58,13 @@ _HISTORY_WINDOW = 12
 
 # Cache: mint -> {simulation_id, consensus, timestamp}
 _simulation_cache: dict[str, dict] = {}
-_SIM_CACHE_TTL = 300  # 5 minutes
+_SIM_CACHE_TTL = 300  # 5 minutes — TTL for a *resolved* consensus
+# ZERA-600: how long a triggered-but-not-yet-resolved sim is considered
+# in-flight for a mint. While in-flight, /deep-analysis REUSES that sim
+# (polls its consensus) instead of triggering a fresh heavy sim per call —
+# polling the documented showcase endpoint must not self-inflict a sim
+# storm (the ~13 GB OOM cause on the documented path).
+_SIM_INFLIGHT_TTL = int(os.environ.get("SIM_INFLIGHT_TTL", "1200"))  # 20 min
 _seen_mints: set[str] = set()
 # ZERA-600: the documented one command must yield ONE credible consensus
 # within attainable Docker memory. The auto-sim loop previously fired a
@@ -706,10 +712,38 @@ async def get_deep_analysis(request: Request, mint: str):
     # that skips the trigger), that reference raised UnboundLocalError → 500.
     # Initialize defensively so Posture B returns its structured 200, not a 500.
     sim_id = None
-    if cached and (time.time() - cached["timestamp"]) < _SIM_CACHE_TTL:
+    import asyncio
+    if cached and cached.get("consensus") is not None and (
+        time.time() - cached["timestamp"]
+    ) < _SIM_CACHE_TTL:
+        # Resolved consensus still fresh — serve it.
         simulation = cached["consensus"]
+        sim_id = cached.get("simulation_id")
+    elif cached and cached.get("simulation_id") and (
+        time.time() - cached["timestamp"]
+    ) < _SIM_INFLIGHT_TTL:
+        # ZERA-600 documented-path storm fix: a sim is already in flight for
+        # this mint. REUSE it — poll its consensus, never re-trigger. This is
+        # what makes the documented "poll /deep-analysis until it populates"
+        # flow converge on ONE sim instead of spawning one per call (~13 GB
+        # OOM). Surface as soon as a real signed aggregation exists.
+        sim_id = cached["simulation_id"]
+        for _ in range(3):
+            await asyncio.sleep(2)
+            consensus = await miroshark.get_consensus(sim_id)
+            if _is_surfaceable_consensus(consensus):
+                simulation = consensus
+                _simulation_cache[mint] = {
+                    "simulation_id": sim_id,
+                    "consensus": consensus,
+                    "timestamp": time.time(),
+                }
+                break
     else:
-        # Try to trigger a new simulation and get results
+        # No cached/in-flight sim for this mint — trigger exactly ONE and
+        # record its sim_id IMMEDIATELY (consensus None) so concurrent/
+        # subsequent calls reuse it via the in-flight branch above instead
+        # of each spawning a fresh heavy sim.
         token_data = {
             "name": scored["name"],
             "ticker": scored["symbol"],
@@ -723,13 +757,16 @@ async def get_deep_analysis(request: Request, mint: str):
         }
         sim_id = await miroshark.trigger_simulation(token_data)
         if sim_id:
-            # Poll briefly for results (simulation may complete quickly for cached configs)
-            import asyncio
-            # ZERA-600 root-cause fix: poll get_consensus and surface as soon
-            # as a real, non-degraded aggregation exists — do NOT gate on
-            # status=="completed" (MiroShark serves a signed consensus while
-            # status is still "ready"/"running"; the old gate is why the
-            # headline showcase rendered null even when consensus existed).
+            _simulation_cache[mint] = {
+                "simulation_id": sim_id,
+                "consensus": None,
+                "timestamp": time.time(),
+            }
+            # Poll briefly; surface as soon as a real, non-degraded signed
+            # aggregation exists (do NOT gate on status=="completed" —
+            # MiroShark serves a signed consensus while status is still
+            # "ready"/"running"; that gate is why the headline showcase
+            # rendered null even when consensus existed).
             for _ in range(3):
                 await asyncio.sleep(2)
                 consensus = await miroshark.get_consensus(sim_id)
