@@ -55,6 +55,23 @@ services:
       - MIROSHARK_DEMO_MAX_PERSONAS=${MIROSHARK_DEMO_MAX_PERSONAS:-4}
       - WONDERWALL_DEFAULT_MAX_ROUNDS=${WONDERWALL_DEFAULT_MAX_ROUNDS:-3}
       - MIROSHARK_SIM_PLATFORM=${MIROSHARK_SIM_PLATFORM:-reddit}
+      # ZERA-600: embeddings power every agent's knowledge-graph retrieval
+      # during the debate. MiroShark's upstream default is a local Ollama at
+      # localhost:11434 — absent from this 4-service stack, so without this
+      # the debate wedges on connection-refused retries and produces ZERO
+      # rounds/actions (documented /deep-analysis stays `pending` forever).
+      # Default to the SAME OpenAI-compatible endpoint + key the judge already
+      # supplies for the LLM, so the documented one command runs end-to-end
+      # with no extra service and no extra credential. All judge-overridable.
+      # NOTE: embedding_service builds `{EMBEDDING_BASE_URL}/v1/embeddings`, so
+      # EMBEDDING_BASE_URL is the host ROOT (no /v1) — unlike LLM_BASE_URL which
+      # includes /v1. Default to OpenAI's root + reuse the judge's LLM key (no
+      # extra credential). Override for a non-OpenAI embedding backend.
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL:-https://api.openai.com}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-${LLM_API_KEY:-}}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
     depends_on:
       neo4j:
         condition: service_healthy
