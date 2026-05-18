@@ -80,18 +80,30 @@ def _is_surfaceable_consensus(c: dict | None) -> bool:
     ``"running"`` (the debate produced actions and a signed manifest but the
     runner state never flips to "completed"). That gate is why the headline
     `simulation_consensus` rendered null even when a real consensus existed.
-    Surface on the *presence of a real aggregation*, not the status string.
+    Surface on the *presence of a real aggregation*, not the status string —
+    but a sim still ``preparing`` emits a manifest/direction skeleton
+    (``neutral`` / ``confidence 0.3`` / 0 posts / 0 attestations / no
+    signature). Surfacing that is a false positive (a fake empty showcase,
+    worse than an honest pending note), so require concrete evidence that a
+    debate actually ran and was cryptographically sealed: posts analyzed,
+    a non-empty signed manifest, ≥1 signed attestation, and a trajectory.
     """
     if not c or c.get("degraded"):
         return False
     direction = (c.get("predicted_direction") or "").lower()
     if direction in ("", "unavailable", "unknown"):
         return False
-    sent = c.get("sentiment_distribution") or {}
-    has_signal = c.get("manifest") is not None or (
-        isinstance(sent, dict) and sum(v for v in sent.values() if isinstance(v, (int, float))) > 0
-    )
-    return has_signal
+    try:
+        posts = int(c.get("total_posts_analyzed") or 0)
+    except (TypeError, ValueError):
+        posts = 0
+    attestations = c.get("agent_attestations") or []
+    trajectory = c.get("belief_trajectory") or []
+    has_manifest_sig = bool(c.get("manifest") is not None and c.get("manifest_signature"))
+    # All four: a real debate produced posts, a signed manifest, at least one
+    # signed agent attestation, and a recorded belief trajectory. The
+    # preparing-state skeleton has none of posts/attestations/sig/trajectory.
+    return posts > 0 and has_manifest_sig and len(attestations) >= 1 and len(trajectory) >= 1
 
 # --- Payment network ---
 PAYMENT_NETWORK = os.environ.get("PAYMENT_NETWORK", "stellar")
