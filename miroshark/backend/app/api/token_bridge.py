@@ -135,9 +135,14 @@ def _run_simulation_pipeline(simulation_id: str, token_data: dict, document_text
 
         state = manager._load_simulation_state(simulation_id)
         if state and state.status == SimulationStatus.READY:
+            # ZERA-600 demonstrative preset: a single platform (default
+            # 'reddit') is far lighter than 'parallel' (which runs every
+            # platform's agent loop concurrently and is the main OOM driver).
+            # Opt back into the heavy run with MIROSHARK_SIM_PLATFORM=parallel.
+            sim_platform = os.environ.get("MIROSHARK_SIM_PLATFORM", "reddit")
             SimulationRunner.start_simulation(
                 simulation_id=simulation_id,
-                platform='parallel',
+                platform=sim_platform,
             )
             logger.info(f"[{simulation_id}] Simulation started for token {ticker}")
         else:

@@ -45,6 +45,16 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://openrouter.ai/api/v1}
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-xiaomi/mimo-v2-flash}
+      # ZERA-600 demonstrative preset (DEFAULT on the documented one command):
+      # a credible multi-agent debate that fits an attainable Docker memory
+      # ceiling. The full 10-persona x parallel run OOMs even at 16 GB, so the
+      # default is a bounded cohort, few rounds, single platform. Each knob is
+      # judge-overridable in the bags .env; set MIROSHARK_SIM_PLATFORM=parallel
+      # + MIROSHARK_DEMO_MAX_PERSONAS=0 + WONDERWALL_DEFAULT_MAX_ROUNDS=10 for
+      # the full (heavier, opt-in) run.
+      - MIROSHARK_DEMO_MAX_PERSONAS=${MIROSHARK_DEMO_MAX_PERSONAS:-4}
+      - WONDERWALL_DEFAULT_MAX_ROUNDS=${WONDERWALL_DEFAULT_MAX_ROUNDS:-3}
+      - MIROSHARK_SIM_PLATFORM=${MIROSHARK_SIM_PLATFORM:-reddit}
     depends_on:
       neo4j:
         condition: service_healthy

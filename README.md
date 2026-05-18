@@ -106,11 +106,24 @@ docker compose up --build
 > The knowledge graph itself is **always** seeded on a fresh, empty Neo4j
 > (synthetic personas, no extra step), so an empty graph is never the cause.
 >
-> **Resource note:** the MiroShark multi-agent swarm is memory-intensive
-> during the debate rounds. Allow Docker **≥ 12 GB RAM**; on an ~8 GB host the
-> `miroshark` container is OOM-killed mid-simulation (exit 137) and consensus
-> stays null even with a valid key. Persona generation and the seeded graph
-> work at 8 GB — only the full simulation rounds need the headroom.
+> **Default = a demonstrative preset (reads the showcase on modest memory).**
+> The documented one command runs a **bounded demonstrative preset** — a
+> small cohort of seed personas, a few debate rounds, a single platform —
+> chosen so `/api/v1/tokens/deep-analysis/{mint}` returns a **real, non-null,
+> multi-agent `simulation_consensus`** within attainable Docker memory, with
+> **no extra steps and no env tuning**. It is a genuine multi-agent debate
+> (multiple distinct personas, multiple rounds, per-agent signed
+> attestations + a signed aggregate manifest), not a single-shot.
+>
+> The **full, heavier run is opt-in** (in the bags `.env`:
+> `MIROSHARK_SIM_PLATFORM=parallel`, `MIROSHARK_DEMO_MAX_PERSONAS=0`,
+> `WONDERWALL_DEFAULT_MAX_ROUNDS=10`). Be honest about it: the full
+> untrimmed run is very memory-intensive and **OOMs even at 16 GB Docker** —
+> it is not the default for exactly that reason. If you enable it and
+> under-provision, the stack still **degrades gracefully (Posture B)**:
+> endpoints return a structured HTTP **200** with `simulation_consensus:
+> null`, an enumerated `reason` (`simulation_incomplete_resource`) and a
+> specific remediation — never a hang, 5xx, or silent null.
 
 This starts:
 

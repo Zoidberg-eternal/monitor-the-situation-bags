@@ -41,9 +41,12 @@ REASON_TOKEN_FEED_UNAVAILABLE = "token_feed_unavailable"
 
 _UNREACHABLE_REMEDIATION = (
     "MiroShark is not reachable (down or restart-looping — commonly an "
-    "out-of-memory restart loop on under-provisioned Docker). Increase "
-    "Docker Desktop memory allocation to >=12 GB and re-run the documented "
-    "command."
+    "out-of-memory restart loop). The documented command runs the bounded "
+    "demonstrative preset that fits modest Docker memory; if you enabled the "
+    "opt-in full run it needs far more memory than Docker Desktop's default "
+    "(it OOMs even at 16 GB) — unset the full-run overrides to use the "
+    "default preset, or raise Docker memory, then re-run "
+    "`docker compose down -v && docker compose up --build`."
 )
 
 _TOKEN_FEED_REMEDIATION = (

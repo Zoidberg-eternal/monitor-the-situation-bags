@@ -11,7 +11,11 @@ Contract (CEO/CPO acceptance, ZERA-600):
   * `reason` is one of the enumerated codes below so callers (and judges) can
     tell degradation causes apart;
   * the OOM-killed-mid-debate case maps to ``simulation_incomplete_resource``
-    with a remediation that names the fix (≥12 GB Docker memory), not "retry".
+    with a remediation that names the actual fix (revert to the default
+    demonstrative preset, or raise Docker memory for the opt-in heavy run) —
+    never a generic "retry". The earlier "≥12 GB" figure was empirically
+    wrong: the full untrimmed run OOMs even at 16 GB, which is exactly why
+    the documented default is now the bounded demonstrative preset.
 """
 
 from __future__ import annotations
@@ -45,14 +49,23 @@ REMEDIATION = {
         "empty-Neo4j synthetic seed step runs (no manual step required)."
     ),
     MIROSHARK_UNREACHABLE: (
-        "MiroShark service is not reachable (down or restart-looping — often "
-        "an out-of-memory restart loop). Increase Docker Desktop memory "
-        "allocation to >=12 GB and re-run the documented command."
+        "MiroShark is not reachable (down or restart-looping — often an "
+        "out-of-memory restart loop). The documented command runs the bounded "
+        "demonstrative preset which fits modest Docker memory; if you enabled "
+        "the opt-in full run (MIROSHARK_SIM_PLATFORM=parallel / "
+        "MIROSHARK_DEMO_MAX_PERSONAS=0 / WONDERWALL_DEFAULT_MAX_ROUNDS=10) it "
+        "needs substantially more memory than Docker Desktop's default — unset "
+        "those to return to the default preset, or raise Docker memory, then "
+        "re-run `docker compose down -v && docker compose up --build`."
     ),
     SIMULATION_INCOMPLETE_RESOURCE: (
-        "Simulation did not complete (likely insufficient Docker memory; "
-        "MiroShark was OOM-killed mid-debate). Increase Docker Desktop memory "
-        "allocation to >=12 GB and re-run the documented command."
+        "Simulation did not complete (MiroShark was OOM-killed mid-debate). "
+        "The documented default is the bounded demonstrative preset that fits "
+        "modest Docker memory; this usually means the opt-in full run was "
+        "enabled (MIROSHARK_SIM_PLATFORM=parallel / MIROSHARK_DEMO_MAX_PERSONAS"
+        "=0 / WONDERWALL_DEFAULT_MAX_ROUNDS=10) — that run OOMs even at 16 GB. "
+        "Unset those to use the default preset, or raise Docker memory well "
+        "beyond 16 GB, then re-run the documented command."
     ),
 }
 

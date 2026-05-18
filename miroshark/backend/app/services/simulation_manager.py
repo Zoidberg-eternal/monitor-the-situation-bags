@@ -330,9 +330,33 @@ class SimulationManager:
                 enrich_with_edges=True
             )
             
+            # --- ZERA-600 demonstrative preset: bounded persona cohort ------
+            # The documented one-command path must produce a real, credible
+            # multi-agent consensus within an attainable Docker memory ceiling.
+            # The full 10-persona x parallel run OOMs even at 16 GB, so the
+            # default preset caps how many seed personas become live agents.
+            # Cap is deterministic (stable order) so it is repeatable; the
+            # full run is opt-in via MIROSHARK_DEMO_MAX_PERSONAS=0 (no cap).
+            try:
+                _cap = int(os.environ.get("MIROSHARK_DEMO_MAX_PERSONAS", "0"))
+            except (TypeError, ValueError):
+                _cap = 0
+            if _cap > 0 and len(filtered.entities) > _cap:
+                kept = sorted(filtered.entities, key=lambda e: e.uuid)[:_cap]
+                logger.info(
+                    "ZERA-600 demo preset: capping personas %d -> %d "
+                    "(MIROSHARK_DEMO_MAX_PERSONAS)",
+                    len(filtered.entities), _cap,
+                )
+                filtered.entities = kept
+                filtered.filtered_count = len(kept)
+                filtered.entity_types = set(
+                    t for e in kept for t in (e.get_entity_type(),) if t
+                )
+
             state.entities_count = filtered.filtered_count
             state.entity_types = list(filtered.entity_types)
-            
+
             if progress_callback:
                 progress_callback(
                     "reading", 100,
